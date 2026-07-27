@@ -21,4 +21,20 @@
 - Sinalizadores de `AbortController` integrados ao iterador assíncrono de streaming evitam requisições desnecessárias da IA quando a conversa muda rapidamente.
 
 ---
-*Retrospective last updated: 2026-07-27 after v1.0 milestone*
+
+## Milestone: v1.1 — Resumo Automático da Reunião
+
+**Shipped:** 2026-07-27
+**Phases:** 1 | **Plans:** 1
+
+### What Was Built
+- **Fase 3 (Resumo Automático da Reunião)**:
+  - Serviço `MeetingSummaryService` no Orquestrador para compilar o diálogo e estruturar automaticamente a ata em Markdown contendo: `Resumo Executivo`, `Decisões Tomadas`, `Action Items (Tarefas)` e `Transcrição Completa`.
+  - Disparo em background ao encerrar a chamada (`session.stop`), notificação visual via toast `"Ata Pronta! 📄"` e download sob demanda no painel flutuante.
+
+### What Worked
+- A execução da geração de ata em background no Fastify manteve o encerramento de sessão instantâneo e não-bloqueante para a extensão Chrome.
+- A atualização do utilitário `triggerMarkdownDownload` permitiu exportar o documento gerado sob demanda mantendo a retrocompatibilidade.
+
+---
+*Retrospective last updated: 2026-07-27 after v1.1 milestone*
