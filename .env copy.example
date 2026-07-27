@@ -1,0 +1,17 @@
+# ============================================================
+# Exemplo de variáveis de ambiente
+# Copie para .env e configure seus valores
+# ============================================================
+
+# --- Gemini API ---
+GEMINI_API_KEY=sua_chave_api_aqui
+
+# --- Portas ---
+ORCHESTRATOR_PORT=3001
+WHISPER_PORT=8000
+
+# --- Whisper ---
+# Modelos disponíveis: tiny, base, small, medium, large-v2, large-v3
+WHISPER_MODEL=small
+# Compute type: float16 (GPU), int8 (CPU), float32 (CPU lento)
+WHISPER_COMPUTE=float16

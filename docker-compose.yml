@@ -1,0 +1,116 @@
+# ============================================================
+# Docker Compose — Copiloto de Conversas
+# ============================================================
+# Uso:
+#   GPU:  docker compose --profile gpu up -d
+#   CPU:  docker compose --profile cpu up -d
+#   Dev:  docker compose --profile dev up -d
+# ============================================================
+
+services:
+
+  # ========================================================
+  # Orquestrador Node.js (Fastify + WebSocket)
+  # ========================================================
+  orchestrator:
+    build:
+      context: .
+      dockerfile: apps/orchestrator/Dockerfile
+    container_name: copilot-orchestrator
+    restart: unless-stopped
+    ports:
+      - "${ORCHESTRATOR_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HOST=0.0.0.0
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - WHISPER_WS_URL=ws://whisper:8000/ws/transcribe
+    depends_on:
+      whisper:
+        condition: service_healthy
+    networks:
+      - copilot-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    profiles:
+      - gpu
+      - cpu
+      - dev
+
+  # ========================================================
+  # Whisper — GPU (CUDA) — Produção
+  # ========================================================
+  whisper:
+    build:
+      context: .
+      dockerfile: apps/transcription-service/Dockerfile
+    container_name: copilot-whisper
+    restart: unless-stopped
+    ports:
+      - "${WHISPER_PORT:-8000}:8000"
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - WHISPER_DEVICE=cuda
+      - WHISPER_COMPUTE=${WHISPER_COMPUTE:-float16}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - whisper-cache:/home/copilot/.cache
+    networks:
+      - copilot-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    profiles:
+      - gpu
+
+  # ========================================================
+  # Whisper — CPU only (sem GPU)
+  # ========================================================
+  whisper-cpu:
+    build:
+      context: .
+      dockerfile: apps/transcription-service/Dockerfile.cpu
+    container_name: copilot-whisper
+    restart: unless-stopped
+    ports:
+      - "${WHISPER_PORT:-8000}:8000"
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - WHISPER_DEVICE=cpu
+      - WHISPER_COMPUTE=${WHISPER_COMPUTE:-int8}
+    volumes:
+      - whisper-cache:/home/copilot/.cache
+    networks:
+      - copilot-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    profiles:
+      - cpu
+      - dev
+
+volumes:
+  whisper-cache:
+    name: copilot-whisper-cache
+
+networks:
+  copilot-network:
+    name: copilot-network
+    driver: bridge

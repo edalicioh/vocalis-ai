@@ -1,0 +1,23 @@
+{
+  "name": "conversation-copilot-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Copiloto de Conversas e Entrevistas Técnicas",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:orchestrator": "npm --prefix apps/orchestrator run dev",
+    "dev:extension": "npm --prefix apps/chrome-extension run dev",
+    "build:types": "npm --prefix packages/shared-types run build",
+    "build:extension": "npm --prefix apps/chrome-extension run build",
+    "build:orchestrator": "npm --prefix apps/orchestrator run build",
+    "docker:gpu": "docker compose --profile gpu up -d",
+    "docker:cpu": "docker compose --profile cpu up -d",
+    "docker:build": "docker compose --profile gpu build --no-cache",
+    "docker:stop": "docker compose --profile gpu --profile cpu down",
+    "docker:logs": "docker compose --profile gpu --profile cpu logs -f",
+    "docker:status": "docker compose ps"
+  }
+}

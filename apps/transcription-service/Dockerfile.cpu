@@ -1,0 +1,33 @@
+# ============================================================
+# Dockerfile — Whisper CPU-only (sem NVIDIA/CUDA)
+# Para máquinas sem GPU ou CI/CD
+# ============================================================
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+COPY apps/transcription-service/requirements.txt .
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+COPY apps/transcription-service/main.py .
+
+ENV WHISPER_MODEL=small
+ENV WHISPER_DEVICE=cpu
+ENV WHISPER_COMPUTE=int8
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+EXPOSE 8000
+
+RUN groupadd -r copilot && useradd -r -g copilot copilot
+RUN mkdir -p /home/copilot/.cache && chown -R copilot:copilot /home/copilot
+USER copilot
+
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
