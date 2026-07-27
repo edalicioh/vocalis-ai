@@ -135,6 +135,7 @@ export const CopilotOverlay: React.FC = () => {
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(loadDimensions);
   const [opacity, setOpacity] = useState<number>(loadOpacity);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [meetingMarkdown, setMeetingMarkdown] = useState<string | null>(null);
 
   // --- Arrasto e Redimensionamento ---
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -246,6 +247,16 @@ export const CopilotOverlay: React.FC = () => {
       case 'status.update':
       case 'STATUS_UPDATE' as any: {
         setStatus(msg.payload as StatusUpdatePayload);
+        break;
+      }
+
+      case 'meeting.summary.completed' as any: {
+        const payload = msg.payload as { markdown: string };
+        if (payload?.markdown) {
+          setMeetingMarkdown(payload.markdown);
+          setCopiedId('meeting-summary');
+          setTimeout(() => setCopiedId(null), 3000);
+        }
         break;
       }
 
@@ -534,7 +545,7 @@ export const CopilotOverlay: React.FC = () => {
   const handleSaveAndDownloadMd = () => {
     const conv = getCurrentConversationObj();
     saveConversation(conv);
-    triggerMarkdownDownload(conv);
+    triggerMarkdownDownload(conv, meetingMarkdown || undefined);
     setCopiedId('save-md');
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -921,10 +932,10 @@ export const CopilotOverlay: React.FC = () => {
         </div>
       )}
 
-      {/* Toast flutuante de feedback de cópia (D-09) */}
+      {/* Toast flutuante de feedback de cópia e ata (D-09) */}
       {copiedId && (
         <div style={toastContainerStyle}>
-          {copiedId === 'save-md' ? '✓ Salvo e baixado!' : 'Copiado! ✓'}
+          {copiedId === 'save-md' ? '✓ Salvo e baixado!' : copiedId === 'meeting-summary' ? 'Ata Pronta! 📄' : 'Copiado! ✓'}
         </div>
       )}
 

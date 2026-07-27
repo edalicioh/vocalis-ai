@@ -8,6 +8,7 @@ import { ContextManager } from './services/context-manager.js';
 import { GeminiProvider } from './services/gemini.js';
 import { QuestionDetector } from './services/question-detector.js';
 import { WhisperClient } from './services/whisper-client.js';
+import { MeetingSummaryService } from './services/meeting-summary.js';
 import { AnswerProvider, AnswerEvent } from './services/answer-provider.js';
 import {
   WSMessage,
@@ -390,6 +391,19 @@ async function startServer() {
                 activeSessionId = null;
               }
               broadcastStatus(targetSessionId);
+
+              // Gerar ata em background ao encerrar a chamada (D-01, D-05)
+              const cm = getContextManager(targetSessionId);
+              MeetingSummaryService.generateSummary(cm, geminiProvider).then(markdown => {
+                broadcastToSession(targetSessionId, {
+                  type: 'meeting.summary.completed' as any,
+                  sessionId: targetSessionId,
+                  payload: { markdown }
+                });
+              }).catch(err => {
+                server.log.error(err, 'Erro ao gerar ata da reunião em background');
+              });
+
               break;
             }
 

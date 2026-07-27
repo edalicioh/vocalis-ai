@@ -38,11 +38,12 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **UI-05**: Feedback visual em toast ao copiar o texto das sugestões ("Copiado! ✓") — Validated em Phase 1
 - ✓ **AI-02**: Injeção dinâmica do Perfil Profissional e Descrição da Vaga no contexto do prompt — Validated em Phase 2
 - ✓ **AI-03**: Suporte a cancelamento imediato de streaming quando nova pergunta for detectada — Validated em Phase 2
+- ✓ **DOC-01**: Geração automática de ata em Markdown (Resumo Executivo, Decisões, Action Items e Transcrição) ao parar a captura — Validated em Phase 3
+- ✓ **DOC-02**: Download sob demanda e salvamento local de atas em formato `.md` no painel flutuante — Validated em Phase 3
 
-### Active (Milestone v1.1 — Resumo Automático da Reunião)
+### Active (Fase Atual & Próximas Melhorias)
 
-- [ ] **DOC-01**: Geração automática de ata em Markdown (Resumo Executivo, Decisões, Action Items e Transcrição) ao parar a captura
-- [ ] **DOC-02**: Download sob demanda e salvamento local de atas em formato `.md` no painel flutuante
+*Todas as melhorias do Milestone v1.1 foram concluídas com sucesso.*
 
 ### Out of Scope (Fora do Escopo Inicial)
 

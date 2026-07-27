@@ -178,14 +178,16 @@ export function exportToMarkdown(conv: SavedConversation): string {
 /**
  * Dispara o download automático do arquivo Markdown (.md) no navegador.
  */
-export function triggerMarkdownDownload(conv: SavedConversation): void {
-  const markdownText = exportToMarkdown(conv);
+export function triggerMarkdownDownload(conv: SavedConversation, customMarkdown?: string): void {
+  const markdownText = customMarkdown || exportToMarkdown(conv);
   const blob = new Blob([markdownText], { type: 'text/markdown;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
 
   const d = new Date(conv.timestamp);
   const formattedDate = d.toISOString().slice(0, 10);
-  const filename = `reuniao-copilot-${formattedDate}-${conv.id.slice(-5)}.md`;
+  const filename = customMarkdown
+    ? `ata-reuniao-${formattedDate}-${conv.id.slice(-5)}.md`
+    : `reuniao-copilot-${formattedDate}-${conv.id.slice(-5)}.md`;
 
   const link = document.createElement('a');
   link.href = url;
