@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-07-27T19:44:13.106Z"
+milestone: v1.2
+milestone_name: Histórico, Busca & Provedores de IA
+status: planned
+last_updated: "2026-07-27T19:46:00.000Z"
 progress:
-  total_phases: 5
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 2
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State — conversation-copilot
@@ -20,14 +20,15 @@ progress:
 
 ## Current Status
 
-- **Current Milestone**: Milestone v1.1 — Resumo Automático da Reunião
-- **Current Phase**: Phase 3 — Resumo Automático da Reunião
-- **Phase Status**: Context Gathered / Ready for Planning
-- **Active Requirements**: `DOC-01`, `DOC-02`
+- **Current Milestone**: Milestone v1.2 — Histórico, Busca & Provedores de IA
+- **Current Phase**: Phase 4 — Histórico & Busca de Reuniões
+- **Phase Status**: Promoted / Ready for Discussion & Planning
+- **Active Requirements**: `HIST-01`, `HIST-02`, `AI-04`, `AI-05`
 
 ---
 
 ## Progress Log
 
-- **2026-07-27**: Milestone v1.0 MVP concluído com 100% dos requisitos validados e arquivados.
-- **2026-07-27**: Milestone v1.1 iniciado com foco em Resumo Automático da Reunião (Ata em Markdown).
+- **2026-07-27**: Milestone v1.0 MVP concluído.
+- **2026-07-27**: Milestone v1.1 Resumo Automático da Reunião concluído.
+- **2026-07-27**: Milestone v1.2 promovido do backlog contendo Phase 4 (Histórico & Busca) e Phase 5 (Novos Provedores de IA).

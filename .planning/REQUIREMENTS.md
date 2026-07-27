@@ -1,13 +1,18 @@
-# Requirements: Milestone v1.1 — Resumo Automático da Reunião
+# Requirements: Milestone v1.2 — Histórico, Busca & Provedores de IA
 
-> Definição dos requisitos escopados para o marco v1.1 do Copiloto de Conversas.
+> Definição dos requisitos escopados para o marco v1.2 do Copiloto de Conversas.
 
 ## Requirements
 
-### Documentação & Atas (DOC)
+### Histórico & Busca (HIST)
 
-- [ ] **DOC-01**: Geração automática de ata em Markdown contendo Resumo Executivo, Decisões Tomadas, Action Items (Tarefas) e Transcrição Completa ao encerrar a captura de áudio (`session.stop`).
-- [ ] **DOC-02**: Download sob demanda e salvamento local de atas em formato `.md` via painel flutuante ou formulário de opções.
+- [ ] **HIST-01**: Armazenar o histórico de reuniões passadas com transcrições e atas no banco local da extensão.
+- [ ] **HIST-02**: Permitir busca por palavra-chave e filtragem rápida das reuniões salvas na extensão.
+
+### Provedores de IA (AI)
+
+- [ ] **AI-04**: Suporte aos provedores de nuvem OpenAI (GPT-4o) e Anthropic (Claude 3.5) via interface `AnswerProvider`.
+- [ ] **AI-05**: Suporte a modelos de IA 100% locais rodando via Ollama (Llama 3 / Mistral) para garantir total privacidade.
 
 ---
 
@@ -15,5 +20,7 @@
 
 | Requirement | Phase | Status |
 |:---|:---|:---|
-| **DOC-01** | Phase 3 | In Progress |
-| **DOC-02** | Phase 3 | In Progress |
+| **HIST-01** | Phase 4 | In Progress |
+| **HIST-02** | Phase 4 | In Progress |
+| **AI-04** | Phase 5 | Planned |
+| **AI-05** | Phase 5 | Planned |

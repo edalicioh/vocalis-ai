@@ -41,9 +41,12 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **DOC-01**: Geração automática de ata em Markdown (Resumo Executivo, Decisões, Action Items e Transcrição) ao parar a captura — Validated em Phase 3
 - ✓ **DOC-02**: Download sob demanda e salvamento local de atas em formato `.md` no painel flutuante — Validated em Phase 3
 
-### Active (Fase Atual & Próximas Melhorias)
+### Active (Milestone v1.2 — Histórico, Busca & Provedores de IA)
 
-*Todas as melhorias do Milestone v1.1 foram concluídas com sucesso.*
+- [ ] **HIST-01**: Armazenar histórico de reuniões passadas no banco local da extensão
+- [ ] **HIST-02**: Busca textual rápida por palavras-chave nas reuniões e atas gravadas
+- [ ] **AI-04**: Suporte ao provedor OpenAI (GPT-4o) e Anthropic (Claude 3.5) via `AnswerProvider`
+- [ ] **AI-05**: Suporte a modelos de IA locais via Ollama (Llama 3 / Mistral)
 
 ### Out of Scope (Fora do Escopo Inicial)
 
