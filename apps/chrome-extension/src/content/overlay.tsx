@@ -745,6 +745,20 @@ export const CopilotOverlay: React.FC = () => {
           >
             {copiedId === 'save-md' ? '✓' : '💾'}
           </button>
+          <button
+            onClick={() => {
+              if (chrome.runtime?.openOptionsPage) {
+                chrome.runtime.openOptionsPage();
+              } else {
+                window.open(chrome.runtime.getURL('src/options/options.html?tab=history'), '_blank');
+              }
+            }}
+            style={actionBtnStyle}
+            title="Abrir Histórico de Reuniões"
+            aria-label="Abrir Histórico de Reuniões"
+          >
+            📚
+          </button>
 
           {/* Slider de Transparência/Opacidade */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginLeft: 'auto' }} title={`Opacidade: ${Math.round(opacity * 100)}%`}>

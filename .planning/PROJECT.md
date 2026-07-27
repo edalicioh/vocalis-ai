@@ -40,11 +40,11 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **AI-03**: Suporte a cancelamento imediato de streaming quando nova pergunta for detectada — Validated em Phase 2
 - ✓ **DOC-01**: Geração automática de ata em Markdown (Resumo Executivo, Decisões, Action Items e Transcrição) ao parar a captura — Validated em Phase 3
 - ✓ **DOC-02**: Download sob demanda e salvamento local de atas em formato `.md` no painel flutuante — Validated em Phase 3
+- ✓ **HIST-01**: Armazenar histórico de reuniões passadas no banco local da extensão — Validated em Phase 4
+- ✓ **HIST-02**: Busca textual rápida por palavras-chave nas reuniões e atas gravadas — Validated em Phase 4
 
 ### Active (Milestone v1.2 — Histórico, Busca & Provedores de IA)
 
-- [ ] **HIST-01**: Armazenar histórico de reuniões passadas no banco local da extensão
-- [ ] **HIST-02**: Busca textual rápida por palavras-chave nas reuniões e atas gravadas
 - [ ] **AI-04**: Suporte ao provedor OpenAI (GPT-4o) e Anthropic (Claude 3.5) via `AnswerProvider`
 - [ ] **AI-05**: Suporte a modelos de IA locais via Ollama (Llama 3 / Mistral)
 
