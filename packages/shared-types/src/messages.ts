@@ -103,9 +103,21 @@ export type PanelMode = 'compact' | 'normal' | 'keywords-only' | 'transcription-
 // Configurações — Expandidas
 // ============================================================
 
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama';
+
 export interface Settings {
+  /** Provedor de IA ativo */
+  aiProvider?: AIProvider;
   /** Chave da API (armazenada no backend — RNF-004) */
   geminiApiKey: string;
+  /** Chave da API OpenAI (GPT-4o) */
+  openaiApiKey?: string;
+  /** Chave da API Anthropic (Claude 3.5 Sonnet) */
+  anthropicApiKey?: string;
+  /** URL do servidor Ollama Local (padrão: http://localhost:11434) */
+  ollamaEndpoint?: string;
+  /** Nome do modelo Ollama Local (padrão: llama3) */
+  ollamaModel?: string;
   /** Modo de resposta da IA — RF-017 */
   responseMode: ResponseMode;
   /** Modo do TTS — RF-013 */

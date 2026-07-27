@@ -4,7 +4,8 @@ import {
   JobDescription,
   ResponseMode,
   TtsMode,
-  Settings
+  Settings,
+  AIProvider
 } from '@conversation-copilot/shared-types';
 
 type SettingsTab = 'api' | 'profile' | 'job' | 'modes';
@@ -16,8 +17,13 @@ interface SettingsFormProps {
 }
 
 export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.0, onOpacityChange }) => {
-  // API
+  // API & Provider
+  const [aiProvider, setAiProvider] = useState<AIProvider>('gemini');
   const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
+  const [ollamaModel, setOllamaModel] = useState('llama3');
 
   // Perfil profissional (RF-015)
   const [name, setName] = useState('');
@@ -50,7 +56,12 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   // Carrega dados salvos
   useEffect(() => {
     chrome.storage.local.get(null, (res) => {
+      if (res.aiProvider) setAiProvider(res.aiProvider);
       if (res.geminiApiKey) setGeminiApiKey(res.geminiApiKey);
+      if (res.openaiApiKey) setOpenaiApiKey(res.openaiApiKey);
+      if (res.anthropicApiKey) setAnthropicApiKey(res.anthropicApiKey);
+      if (res.ollamaEndpoint) setOllamaEndpoint(res.ollamaEndpoint);
+      if (res.ollamaModel) setOllamaModel(res.ollamaModel);
       if (res.name) setName(res.name);
       if (res.role) setRole(res.role);
       if (res.seniority) setSeniority(res.seniority);
@@ -100,7 +111,12 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
     };
 
     return {
+      aiProvider,
       geminiApiKey,
+      openaiApiKey,
+      anthropicApiKey,
+      ollamaEndpoint,
+      ollamaModel,
       responseMode,
       ttsMode,
       ttsSpeed,
@@ -116,7 +132,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
     const payload = buildPayload();
 
     chrome.storage.local.set({
-      geminiApiKey, name, role, seniority, skills, experiences, projects,
+      aiProvider, geminiApiKey, openaiApiKey, anthropicApiKey, ollamaEndpoint, ollamaModel,
+      name, role, seniority, skills, experiences, projects,
       strengths, weaknesses, jobTitle, jobCompany, jobDescription,
       jobRequirements, jobNiceToHave, jobTechnologies, jobNotes,
       responseMode, ttsMode, ttsSpeed, ttsVolume
@@ -157,9 +174,41 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
         {/* Tab: API */}
         {activeTab === 'api' && (
           <>
-            <Field label="Chave de API do Gemini" type="password" value={geminiApiKey} onChange={setGeminiApiKey} placeholder="AIzaSy..." />
+            <div style={fieldGroupStyle}>
+              <label style={labelStyle}>Provedor de IA Ativo</label>
+              <select
+                value={aiProvider}
+                onChange={e => setAiProvider(e.target.value as AIProvider)}
+                style={inputStyle}
+              >
+                <option value="gemini">✨ Google Gemini API</option>
+                <option value="openai">🤖 OpenAI (GPT-4o / GPT-4o-mini)</option>
+                <option value="anthropic">🧠 Anthropic (Claude 3.5 Sonnet)</option>
+                <option value="ollama">🏠 Ollama Local (100% Offline)</option>
+              </select>
+            </div>
+
+            {aiProvider === 'gemini' && (
+              <Field label="Chave de API do Google Gemini" type="password" value={geminiApiKey} onChange={setGeminiApiKey} placeholder="AIzaSy..." />
+            )}
+
+            {aiProvider === 'openai' && (
+              <Field label="Chave de API da OpenAI (sk-...)" type="password" value={openaiApiKey} onChange={setOpenaiApiKey} placeholder="sk-..." />
+            )}
+
+            {aiProvider === 'anthropic' && (
+              <Field label="Chave de API da Anthropic (sk-ant-...)" type="password" value={anthropicApiKey} onChange={setAnthropicApiKey} placeholder="sk-ant-..." />
+            )}
+
+            {aiProvider === 'ollama' && (
+              <>
+                <Field label="Endpoint do Ollama Local" value={ollamaEndpoint} onChange={setOllamaEndpoint} placeholder="http://localhost:11434" />
+                <Field label="Nome do Modelo Ollama" value={ollamaModel} onChange={setOllamaModel} placeholder="llama3 ou mistral" />
+              </>
+            )}
+
             <div style={hintStyle}>
-              A chave é enviada ao orquestrador local e nunca armazenada externamente (RNF-004).
+              A configuração selecionada é enviada ao orquestrador local e salva no seu navegador.
             </div>
           </>
         )}

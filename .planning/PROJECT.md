@@ -42,11 +42,12 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **DOC-02**: Download sob demanda e salvamento local de atas em formato `.md` no painel flutuante — Validated em Phase 3
 - ✓ **HIST-01**: Armazenar histórico de reuniões passadas no banco local da extensão — Validated em Phase 4
 - ✓ **HIST-02**: Busca textual rápida por palavras-chave nas reuniões e atas gravadas — Validated em Phase 4
+- ✓ **AI-04**: Suporte ao provedor OpenAI (GPT-4o) e Anthropic (Claude 3.5) via `AnswerProvider` — Validated em Phase 5
+- ✓ **AI-05**: Suporte a modelos de IA locais via Ollama (Llama 3 / Mistral) — Validated em Phase 5
 
-### Active (Milestone v1.2 — Histórico, Busca & Provedores de IA)
+### Active (Fase Atual & Próximas Melhorias)
 
-- [ ] **AI-04**: Suporte ao provedor OpenAI (GPT-4o) e Anthropic (Claude 3.5) via `AnswerProvider`
-- [ ] **AI-05**: Suporte a modelos de IA locais via Ollama (Llama 3 / Mistral)
+*Todas as melhorias do Milestone v1.2 foram concluídas com sucesso.*
 
 ### Out of Scope (Fora do Escopo Inicial)
 

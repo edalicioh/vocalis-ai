@@ -9,6 +9,7 @@ import { GeminiProvider } from './services/gemini.js';
 import { QuestionDetector } from './services/question-detector.js';
 import { WhisperClient } from './services/whisper-client.js';
 import { MeetingSummaryService } from './services/meeting-summary.js';
+import { AnswerProviderManager } from './services/provider-manager.js';
 import { AnswerProvider, AnswerEvent } from './services/answer-provider.js';
 import {
   WSMessage,
@@ -44,13 +45,16 @@ function getContextManager(sessionId?: string): ContextManager {
   return cm;
 }
 
-const geminiProvider = new GeminiProvider(process.env.GEMINI_API_KEY);
+const providerManager = new AnswerProviderManager();
+if (process.env.GEMINI_API_KEY) {
+  providerManager.geminiProvider.setApiKey(process.env.GEMINI_API_KEY);
+}
 const whisperClient = new WhisperClient(
   process.env.WHISPER_WS_URL || 'ws://localhost:8000/ws/transcribe'
 );
 
 // AnswerProvider substituível (RNF-006)
-let answerProvider: AnswerProvider = geminiProvider;
+let answerProvider: AnswerProvider = providerManager;
 
 let activeConnections = new Set<WebSocket>();
 let activeSessionId: string | null = null;
@@ -394,7 +398,7 @@ async function startServer() {
 
               // Gerar ata em background ao encerrar a chamada (D-01, D-05)
               const cm = getContextManager(targetSessionId);
-              MeetingSummaryService.generateSummary(cm, geminiProvider).then(markdown => {
+              MeetingSummaryService.generateSummary(cm, providerManager.geminiProvider).then(markdown => {
                 broadcastToSession(targetSessionId, {
                   type: 'meeting.summary.completed' as any,
                   sessionId: targetSessionId,
@@ -439,12 +443,10 @@ async function startServer() {
             case 'settings.update': {
               const targetSessionId = msg.sessionId || socketSessionMap.get(socket);
               const settings = msg.payload as Partial<Settings>;
-              server.log.info({ responseMode: settings.responseMode, targetSessionId }, '⚙️ [Configurações] Atualizadas');
+              server.log.info({ responseMode: settings.responseMode, aiProvider: settings.aiProvider, targetSessionId }, '⚙️ [Configurações] Atualizadas');
 
               const cm = getContextManager(targetSessionId);
-              if (settings.geminiApiKey) {
-                geminiProvider.setApiKey(settings.geminiApiKey);
-              }
+              providerManager.updateSettings(settings);
               if (settings.userProfile) {
                 cm.updateProfile(settings.userProfile);
               }
