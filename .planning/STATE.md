@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: — Histórico, Busca & Provedores de IA
 status: unknown
-last_updated: "2026-07-27T20:13:22.204Z"
+last_updated: "2026-07-27T20:20:32.679Z"
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 1
+  total_plans: 2
   completed_plans: 1
-  percent: 100
+  percent: 50
 ---
 
 # Project State — conversation-copilot
