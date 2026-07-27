@@ -1,3 +1,17 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: unknown
+last_updated: "2026-07-27T19:08:44.813Z"
+progress:
+  total_phases: 2
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 1
+  percent: 50
+---
+
 # Project State — conversation-copilot
 
 > Estado atual do projeto, fase ativa e histórico de progresso.
