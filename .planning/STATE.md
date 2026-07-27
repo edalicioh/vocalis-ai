@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-07-27T19:13:05.191Z"
+milestone: v1.1
+milestone_name: Resumo Automático da Reunião
+status: planned
+last_updated: "2026-07-27T19:33:00.000Z"
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 100
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 1
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State — conversation-copilot
@@ -20,15 +20,14 @@ progress:
 
 ## Current Status
 
-- **Current Milestone**: Milestone 1 — Usabilidade & Orquestração Avançada
-- **Current Phase**: Phase 1 — Refinamento de Usabilidade da Extensão
-- **Phase Status**: Ready for Planning / Discussion
-- **Active Requirements**: `UI-01`, `UI-02`, `UI-03`, `UI-04`, `UI-05`
+- **Current Milestone**: Milestone v1.1 — Resumo Automático da Reunião
+- **Current Phase**: Phase 3 — Resumo Automático da Reunião
+- **Phase Status**: Context Gathered / Ready for Planning
+- **Active Requirements**: `DOC-01`, `DOC-02`
 
 ---
 
 ## Progress Log
 
-- **2026-07-27**: Projeto inicializado via `/gsd-new-project`.
-- **2026-07-27**: Base de código mapeada com sucesso em `.planning/codebase/`.
-- **2026-07-27**: `PROJECT.md`, `REQUIREMENTS.md` e `ROADMAP.md` criados e commitados.
+- **2026-07-27**: Milestone v1.0 MVP concluído com 100% dos requisitos validados e arquivados.
+- **2026-07-27**: Milestone v1.1 iniciado com foco em Resumo Automático da Reunião (Ata em Markdown).

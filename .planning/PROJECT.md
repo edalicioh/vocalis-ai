@@ -39,9 +39,10 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **AI-02**: Injeção dinâmica do Perfil Profissional e Descrição da Vaga no contexto do prompt — Validated em Phase 2
 - ✓ **AI-03**: Suporte a cancelamento imediato de streaming quando nova pergunta for detectada — Validated em Phase 2
 
-### Active (Fase Atual & Próximas Melhorias)
+### Active (Milestone v1.1 — Resumo Automático da Reunião)
 
-*Todas as melhorias do Milestone v1.0 foram concluídas com sucesso.*
+- [ ] **DOC-01**: Geração automática de ata em Markdown (Resumo Executivo, Decisões, Action Items e Transcrição) ao parar a captura
+- [ ] **DOC-02**: Download sob demanda e salvamento local de atas em formato `.md` no painel flutuante
 
 ### Out of Scope (Fora do Escopo Inicial)
 
