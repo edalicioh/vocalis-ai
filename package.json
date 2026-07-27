@@ -13,11 +13,16 @@
     "build:types": "npm --prefix packages/shared-types run build",
     "build:extension": "npm --prefix apps/chrome-extension run build",
     "build:orchestrator": "npm --prefix apps/orchestrator run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "docker:gpu": "docker compose --profile gpu up -d",
     "docker:cpu": "docker compose --profile cpu up -d",
     "docker:build": "docker compose --profile gpu build --no-cache",
     "docker:stop": "docker compose --profile gpu --profile cpu down",
     "docker:logs": "docker compose --profile gpu --profile cpu logs -f",
     "docker:status": "docker compose ps"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.1"
   }
 }
