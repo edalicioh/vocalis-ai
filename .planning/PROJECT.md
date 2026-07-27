@@ -36,11 +36,12 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **UI-03**: Slider visual de ajuste de opacidade/transparência no painel flutuante com persistência — Validated em Phase 1
 - ✓ **UI-04**: Atalho rápido para minimizar o painel (duplo clique no header ou atalho de teclado) — Validated em Phase 1
 - ✓ **UI-05**: Feedback visual em toast ao copiar o texto das sugestões ("Copiado! ✓") — Validated em Phase 1
+- ✓ **AI-02**: Injeção dinâmica do Perfil Profissional e Descrição da Vaga no contexto do prompt — Validated em Phase 2
+- ✓ **AI-03**: Suporte a cancelamento imediato de streaming quando nova pergunta for detectada — Validated em Phase 2
 
 ### Active (Fase Atual & Próximas Melhorias)
 
-- [ ] **AI-02**: Injeção dinâmica do Perfil Profissional e Descrição da Vaga no contexto do prompt
-- [ ] **AI-03**: Suporte a cancelamento imediato de streaming quando nova pergunta for detectada
+*Todas as melhorias do Milestone v1.0 foram concluídas com sucesso.*
 
 ### Out of Scope (Fora do Escopo Inicial)
 
