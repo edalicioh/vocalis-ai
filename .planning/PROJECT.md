@@ -30,15 +30,15 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **TRANS-01**: Transcrição local em tempo real utilizando `faster-whisper` (GPU/CPU) via WebSocket — existing
 - ✓ **ORCH-01**: Servidor Orquestrador Node.js + Fastify gerenciando a sessão e conexões WS — existing
 - ✓ **AI-01**: Integração em streaming com a API Google Gemini (`GeminiProvider`) — existing
-- ✓ **UI-01**: Painel flutuante injetado no Shadow DOM com suporte a arrasto e opacidade — existing
+- ✓ **UI-01**: Painel flutuante injetado no Shadow DOM com suporte a arrasto — existing
 - ✓ **TTS-01**: Leitura assistida de respostas usando a API Web Speech Synthesis do navegador — existing
+- ✓ **UI-02**: Redimensionamento livre por arrasto (drag-to-resize, limites 280-700px / 200px-90vh) com salvamento em `localStorage` — Validated em Phase 1
+- ✓ **UI-03**: Slider visual de ajuste de opacidade/transparência no painel flutuante com persistência — Validated em Phase 1
+- ✓ **UI-04**: Atalho rápido para minimizar o painel (duplo clique no header ou atalho de teclado) — Validated em Phase 1
+- ✓ **UI-05**: Feedback visual em toast ao copiar o texto das sugestões ("Copiado! ✓") — Validated em Phase 1
 
 ### Active (Fase Atual & Próximas Melhorias)
 
-- [ ] **UI-02**: Redimensionamento livre do painel flutuante por arrasto (drag-to-resize, limites 280-700px / 200px-90vh) com salvamento em `localStorage`
-- [ ] **UI-03**: Slider visual de ajuste de opacidade/transparência no painel flutuante com persistência
-- [ ] **UI-04**: Atalho rápido para minimizar o painel (duplo clique no header ou atalho de teclado)
-- [ ] **UI-05**: Feedback visual em toast ao copiar o texto das sugestões ("Copiado! ✓")
 - [ ] **AI-02**: Injeção dinâmica do Perfil Profissional e Descrição da Vaga no contexto do prompt
 - [ ] **AI-03**: Suporte a cancelamento imediato de streaming quando nova pergunta for detectada
 
