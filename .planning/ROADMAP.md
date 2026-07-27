@@ -35,15 +35,17 @@
 1. O prompt enviado ao Gemini injeta automaticamente as variáveis de perfil do candidato e descrição da vaga configurados.
 2. O orquestrador envia um sinal de cancelamento (`answer.cancelled`) e aborta a requisição ativa ao detectar uma nova pergunta do entrevistador.
 
+### Phase 3: Resumo Automático da Reunião
+**Goal**: Gerar ata e pontos principais em Markdown exportável ao final da chamada.
+**Requirements**: `DOC-01`, `DOC-02`
+**UI Hint**: yes
+**Success Criteria**:
+1. A ata em Markdown contendo Resumo Executivo, Decisões, Action Items e Transcrição Completa é gerada automaticamente ao parar a captura.
+2. O arquivo de ata pode ser baixado sob demanda a qualquer momento via painel flutuante.
+
 ---
 
 ## Backlog
-
-### Phase 999.1: Resumo Automático da Reunião (BACKLOG)
-**Goal**: Gerar ata e pontos principais em Markdown exportável ao final da chamada.
-**Requirements**: TBD
-**Plans**: 0 plans
-- [ ] TBD (promover com /gsd-review-backlog quando pronto)
 
 ### Phase 999.2: Histórico & Busca de Reuniões (BACKLOG)
 **Goal**: Salvar conversas anteriores e permitir busca rápida por transcrições passadas.

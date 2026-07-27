@@ -1,4 +1,4 @@
-# Phase 999.1: Resumo Automático da Reunião - Context
+# Phase 3: Resumo Automático da Reunião - Context
 
 **Gathered:** 2026-07-27
 **Status:** Ready for planning
@@ -65,5 +65,5 @@ Esta fase compreende a geração automática de ata e resumo executivo em Markdo
 </deferred>
 
 ---
-*Phase: 999.1-resumo-automatico-da-reuniao*
+*Phase: 03-resumo-automatico-da-reuniao*
 *Context gathered: 2026-07-27*

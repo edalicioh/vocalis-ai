@@ -1,10 +1,10 @@
-# Phase 999.1: Resumo Automático da Reunião - Discussion Log
+# Phase 3: Resumo Automático da Reunião - Discussion Log
 
 > **Audit trail only.** Do not use as input to planning, research, or execution agents.
-> Decisions are captured in 999.1-CONTEXT.md — this log preserves the alternatives considered.
+> Decisions are captured in 03-CONTEXT.md — this log preserves the alternatives considered.
 
 **Date:** 2026-07-27
-**Phase:** 999.1-resumo-automatico-da-reuniao
+**Phase:** 03-resumo-automatico-da-reuniao
 **Areas discussed:** Gatilho da Geração, Estrutura do Documento Markdown (Ata)
 
 ---
