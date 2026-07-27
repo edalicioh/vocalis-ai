@@ -61,8 +61,16 @@ export class ContextManager {
     this.userProfile = { ...this.userProfile, ...profile };
   }
 
+  public getUserProfile(): UserProfile {
+    return this.userProfile;
+  }
+
   public updateJobDescription(job: Partial<JobDescription>) {
     this.jobDescription = { ...this.jobDescription, ...job };
+  }
+
+  public getJobDescription(): JobDescription {
+    return this.jobDescription;
   }
 
   // ========= Gerenciamento de falas =========

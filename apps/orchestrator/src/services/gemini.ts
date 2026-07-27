@@ -1,6 +1,38 @@
-import { GoogleGenerativeAI, GenerateContentStreamResult } from '@google/generative-ai';
-import { StructuredAnswer, ResponseMode } from '@conversation-copilot/shared-types';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { StructuredAnswer, ResponseMode, UserProfile, JobDescription } from '@conversation-copilot/shared-types';
 import { AnswerProvider, AnswerInput, AnswerEvent } from './answer-provider.js';
+
+export function buildSystemInstruction(userProfile?: UserProfile, jobDescription?: JobDescription): string {
+  const parts: string[] = [];
+
+  parts.push(`Você é um assistente copiloto pessoal especializado em entrevistas e reuniões técnicas.`);
+  parts.push(`Sua função é gerar sugestões de respostas diretas, concisas (30-60 palavras) e tecnicamente precisas em Português do Brasil (pt-BR).`);
+  parts.push(`Nunca invente experiências falsas do usuário nem alucine fatos não declarados (RNF-004).`);
+
+  if (userProfile) {
+    parts.push(`\n[PERFIL DO CANDIDATO]`);
+    if (userProfile.name) parts.push(`- Nome: ${userProfile.name}`);
+    if (userProfile.role) parts.push(`- Cargo: ${userProfile.role}`);
+    if (userProfile.seniority) parts.push(`- Senioridade: ${userProfile.seniority}`);
+    if (userProfile.skills?.length) parts.push(`- Habilidades: ${userProfile.skills.join(', ')}`);
+    if (userProfile.experiences?.length) parts.push(`- Experiências: ${userProfile.experiences.join('; ')}`);
+    if (userProfile.projects?.length) parts.push(`- Projetos: ${userProfile.projects.join('; ')}`);
+    if (userProfile.strengths?.length) parts.push(`- Pontos Fortes: ${userProfile.strengths.join(', ')}`);
+    if (userProfile.weaknesses?.length) parts.push(`- Áreas a desenvolver: ${userProfile.weaknesses.join(', ')}`);
+  }
+
+  if (jobDescription) {
+    parts.push(`\n[DETALHES DA VAGA]`);
+    if (jobDescription.title) parts.push(`- Título da vaga: ${jobDescription.title}`);
+    if (jobDescription.company) parts.push(`- Empresa: ${jobDescription.company}`);
+    if (jobDescription.description) parts.push(`- Descrição: ${jobDescription.description}`);
+    if (jobDescription.requirements?.length) parts.push(`- Requisitos obrigatórios: ${jobDescription.requirements.join(', ')}`);
+    if (jobDescription.niceToHave?.length) parts.push(`- Diferenciais: ${jobDescription.niceToHave.join(', ')}`);
+    if (jobDescription.technologies?.length) parts.push(`- Tecnologias: ${jobDescription.technologies.join(', ')}`);
+  }
+
+  return parts.join('\n');
+}
 
 /**
  * Implementação do AnswerProvider para Google Gemini.
@@ -39,6 +71,13 @@ export class GeminiProvider implements AnswerProvider {
     const controller = new AbortController();
     this.activeRequests.set(input.requestId, controller);
 
+    // Se um sinal externo for passado, associa abort handler
+    if (input.signal) {
+      input.signal.addEventListener('abort', () => {
+        controller.abort();
+      });
+    }
+
     // Emit answer.started
     yield {
       type: 'answer.started',
@@ -50,14 +89,18 @@ export class GeminiProvider implements AnswerProvider {
     };
 
     try {
-      const model = this.genAI.getGenerativeModel({ model: this.modelName });
+      const systemInstruction = buildSystemInstruction(input.userProfile, input.jobDescription);
+      const model = this.genAI.getGenerativeModel({
+        model: this.modelName,
+        systemInstruction
+      });
       const result = await model.generateContentStream(input.prompt);
 
       let fullText = '';
 
       for await (const chunk of result.stream) {
         // Check if cancelled
-        if (controller.signal.aborted) {
+        if (controller.signal.aborted || input.signal?.aborted) {
           yield {
             type: 'answer.cancelled',
             data: { id: input.requestId, reason: 'Nova pergunta detectada' }

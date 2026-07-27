@@ -1,4 +1,6 @@
 import {
+  UserProfile,
+  JobDescription,
   StructuredAnswer,
   ResponseMode,
   AnswerStartedPayload,
@@ -37,6 +39,12 @@ export interface AnswerInput {
   prompt: string;
   /** Modo de resposta selecionado */
   responseMode: ResponseMode;
+  /** Perfil profissional do candidato (RF-015) */
+  userProfile?: UserProfile;
+  /** Descrição e requisitos da vaga (RF-016) */
+  jobDescription?: JobDescription;
+  /** Sinal de aborto/cancelamento de streaming */
+  signal?: AbortSignal;
 }
 
 /**

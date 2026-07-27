@@ -11,9 +11,11 @@ type SettingsTab = 'api' | 'profile' | 'job' | 'modes';
 
 interface SettingsFormProps {
   onSave?: (payload: Partial<Settings>) => void;
+  opacity?: number;
+  onOpacityChange?: (val: number) => void;
 }
 
-export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave }) => {
+export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.0, onOpacityChange }) => {
   // API
   const [geminiApiKey, setGeminiApiKey] = useState('');
 
@@ -219,6 +221,12 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave }) => {
                 <option value="keywords">🔑 Ler palavras-chave</option>
                 <option value="manual">🖐️ Manual (Alt+S)</option>
               </select>
+            </div>
+            <div style={fieldGroupStyle}>
+              <label style={labelStyle}>Opacidade do Painel: {Math.round(opacity * 100)}%</label>
+              <input type="range" min="0.3" max="1.0" step="0.05" value={opacity}
+                onChange={e => onOpacityChange?.(parseFloat(e.target.value))}
+                style={{ width: '100%', accentColor: '#60a5fa' }} />
             </div>
             <div style={fieldGroupStyle}>
               <label style={labelStyle}>Velocidade da Leitura: {ttsSpeed}x</label>

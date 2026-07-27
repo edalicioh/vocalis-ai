@@ -145,7 +145,9 @@ async function triggerLLMSuggestion(questionText: string, targetSessionId?: stri
       requestId,
       question: questionText,
       prompt,
-      responseMode: currentResponseMode
+      responseMode: currentResponseMode,
+      userProfile: cm.getUserProfile(),
+      jobDescription: cm.getJobDescription()
     });
 
     let isFirst = true;

@@ -657,21 +657,21 @@ export const CopilotOverlay: React.FC = () => {
         backgroundColor: `rgba(17, 24, 39, ${opacity})`
       }}
     >
-      {/* Drag Handle (com duplo clique para colapsar/expandir) */}
+      {/* Drag Handle (com duplo clique para alternar modo compacto) */}
       <div
         style={{
           ...dragHandleStyle,
           cursor: isDragging ? 'grabbing' : 'grab'
         }}
         onPointerDown={handleDragStart}
-        onDoubleClick={() => setPanelOpen(false)}
-        title="Arrastar ou dar duplo clique para recolher"
+        onDoubleClick={() => setPanelMode(prev => prev === 'compact' ? 'normal' : 'compact')}
+        title="Arrastar ou dar duplo clique para alternar modo compacto"
       >
         <span style={{ fontSize: '10px', color: '#6b7280' }}>⋮⋮</span>
       </div>
 
       {/* Toolbar — linha de título e ações globais */}
-      <div style={toolbarStyle} onDoubleClick={() => setPanelOpen(false)}>
+      <div style={toolbarStyle} onDoubleClick={() => setPanelMode(prev => prev === 'compact' ? 'normal' : 'compact')}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
           <span style={indicatorStyle(status.whisperConnected && status.llmConfigured)} />
           <span style={{ fontSize: '12px', fontWeight: 700, color: '#f3f4f6' }}>Copiloto</span>
@@ -681,16 +681,10 @@ export const CopilotOverlay: React.FC = () => {
         </div>
         <div style={{ display: 'flex', gap: '2px' }}>
           <button
-            onClick={() => {
-              if (chrome.runtime?.openOptionsPage) {
-                chrome.runtime.openOptionsPage();
-              } else {
-                window.open(chrome.runtime.getURL('src/options/options.html'));
-              }
-            }}
-            style={iconButtonStyle}
-            title="Abrir Configurações Globais (⚙️)"
-            aria-label="Abrir Configurações Globais"
+            onClick={() => setShowSettings(prev => !prev)}
+            style={{ ...iconButtonStyle, color: showSettings ? '#60a5fa' : '#9ca3af' }}
+            title="Ajustes"
+            aria-label="Ajustes"
           >
             ⚙️
           </button>
@@ -746,7 +740,7 @@ export const CopilotOverlay: React.FC = () => {
             <span style={{ fontSize: '10px', color: '#9ca3af' }}>💧</span>
             <input
               type="range"
-              min="0.5"
+              min="0.3"
               max="1.0"
               step="0.05"
               value={opacity}
@@ -774,7 +768,13 @@ export const CopilotOverlay: React.FC = () => {
       {/* Conteúdo principal ou ajustes */}
       {showSettings ? (
         <div style={settingsContainerStyle}>
-          <SettingsForm />
+          <SettingsForm
+            opacity={opacity}
+            onOpacityChange={(val) => {
+              setOpacity(val);
+              saveOpacity(val);
+            }}
+          />
         </div>
       ) : (
         <div style={scrollAreaStyle}>
@@ -921,7 +921,14 @@ export const CopilotOverlay: React.FC = () => {
         </div>
       )}
 
-      {/* Resize Handle no canto inferior direito */}
+      {/* Toast flutuante de feedback de cópia (D-09) */}
+      {copiedId && (
+        <div style={toastContainerStyle}>
+          {copiedId === 'save-md' ? '✓ Salvo e baixado!' : 'Copiado! ✓'}
+        </div>
+      )}
+
+      {/* Resize Handle no canto inferior direito (D-01) */}
       <div
         onPointerDown={handleResizeStart}
         style={{
@@ -971,6 +978,7 @@ const floatingButtonStyle: React.CSSProperties = {
 
 const containerStyle: React.CSSProperties = {
   position: 'fixed',
+  maxHeight: '90vh',
   backdropFilter: 'blur(12px)',
   border: '1px solid rgba(255, 255, 255, 0.12)',
   borderRadius: '16px',
@@ -983,6 +991,23 @@ const containerStyle: React.CSSProperties = {
   padding: '0',
   overflow: 'hidden',
   touchAction: 'none'
+};
+
+const toastContainerStyle: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '12px',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  backgroundColor: 'rgba(16, 185, 129, 0.95)',
+  color: '#ffffff',
+  padding: '4px 12px',
+  borderRadius: '16px',
+  fontSize: '11px',
+  fontWeight: 600,
+  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+  pointerEvents: 'none',
+  zIndex: 999999,
+  animation: 'copilot-fadeIn 0.2s ease-out'
 };
 
 const dragHandleStyle: React.CSSProperties = {
