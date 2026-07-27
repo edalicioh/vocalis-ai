@@ -34,3 +34,25 @@
 **Success Criteria**:
 1. O prompt enviado ao Gemini injeta automaticamente as variáveis de perfil do candidato e descrição da vaga configurados.
 2. O orquestrador envia um sinal de cancelamento (`answer.cancelled`) e aborta a requisição ativa ao detectar uma nova pergunta do entrevistador.
+
+---
+
+## Backlog
+
+### Phase 999.1: Resumo Automático da Reunião (BACKLOG)
+**Goal**: Gerar ata e pontos principais em Markdown exportável ao final da chamada.
+**Requirements**: TBD
+**Plans**: 0 plans
+- [ ] TBD (promover com /gsd-review-backlog quando pronto)
+
+### Phase 999.2: Histórico & Busca de Reuniões (BACKLOG)
+**Goal**: Salvar conversas anteriores e permitir busca rápida por transcrições passadas.
+**Requirements**: TBD
+**Plans**: 0 plans
+- [ ] TBD (promover com /gsd-review-backlog quando pronto)
+
+### Phase 999.3: Suporte a Novos Provedores de IA (BACKLOG)
+**Goal**: Adicionar suporte a OpenAI (GPT-4o), Anthropic (Claude 3.5) e Ollama (local).
+**Requirements**: TBD
+**Plans**: 0 plans
+- [ ] TBD (promover com /gsd-review-backlog quando pronto)
