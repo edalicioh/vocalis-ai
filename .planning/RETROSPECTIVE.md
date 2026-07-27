@@ -37,4 +37,23 @@
 - A atualização do utilitário `triggerMarkdownDownload` permitiu exportar o documento gerado sob demanda mantendo a retrocompatibilidade.
 
 ---
-*Retrospective last updated: 2026-07-27 after v1.1 milestone*
+
+## Milestone: v1.2 — Histórico, Busca & Provedores de IA
+
+**Shipped:** 2026-07-27
+**Phases:** 2 | **Plans:** 2
+
+### What Was Built
+- **Fase 4 (Histórico & Busca de Reuniões)**:
+  - Aba "📚 Histórico" na tela de opções (`options.tsx`) com busca por palavra-chave em tempo real (*case-insensitive*) sobre títulos, URLs, transcrições e atas.
+  - Download individual de atas em `.md`, exclusão de registros do `chrome.storage.local` e botão de atalho `📚` na barra de ferramentas do painel flutuante.
+- **Fase 5 (Suporte a Novos Provedores de IA)**:
+  - Integração dos provedores `OpenAIProvider` (GPT-4o), `AnthropicProvider` (Claude 3.5 Sonnet) e `OllamaProvider` (100% local/offline) via `AnswerProvider`.
+  - Alternador dinâmico `AnswerProviderManager` no Orquestrador e seletor com campos de chave de API condicionais no formulário de configurações do painel.
+
+### What Worked
+- A arquitetura `AnswerProviderManager` permitiu alternar o provedor de IA ativo sem a necessidade de reiniciar o servidor Orquestrador.
+- O filtro de busca em memória na página de opções proporcionou uma experiência extremamente fluida e instantânea para encontrar reuniões passadas.
+
+---
+*Retrospective last updated: 2026-07-27 after v1.2 milestone*

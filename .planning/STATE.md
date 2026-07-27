@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: — Histórico, Busca & Provedores de IA
 status: unknown
-last_updated: "2026-07-27T20:23:32.705Z"
+last_updated: "2026-07-27T20:24:45.469Z"
 progress:
   total_phases: 2
   completed_phases: 2
