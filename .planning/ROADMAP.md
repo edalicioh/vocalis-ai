@@ -67,6 +67,38 @@ Plans:
 
 ---
 
+## Milestone v1.5: Supressão de Ruído Avançada, Diagnósticos de Latência & Atalhos Globais
+
+### Phase 11: Supressão de Ruído Neural & Filtros DSP de Áudio
+**Goal:** Aplicar supressão de ruído no AudioWorklet/Offscreen Document usando nós DSP (DynamicsCompressor & BiquadFilter / RNNoise) para filtrar ruídos ambiente pesados antes do envio ao Whisper.
+**Requirements:** `AUDIO-03`
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (gerado via `/gsd-plan-phase 11`)
+
+---
+
+### Phase 12: Métrica & Painel de Diagnósticos de Latência no HUD
+**Goal:** Exibir métricas detalhadas de latência em tempo real no HUD (tempo de transcrição Whisper, tempo de resposta LLM, latência de rede WS em ms).
+**Requirements:** `DIAG-01`
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (gerado via `/gsd-plan-phase 12`)
+
+---
+
+### Phase 13: Atalhos de Teclado Globais & Comandos do Chrome
+**Goal:** Implementar comandos globais configuráveis (`chrome.commands`) para controlar gravação, forçar sugestão e alternar TTS mesmo com a janela do navegador em segundo plano.
+**Requirements:** `SHORTCUT-01`
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (gerado via `/gsd-plan-phase 13`)
+
+---
+
 ## Backlog
 
 *(Nenhum item pendente no backlog no momento)*

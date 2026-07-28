@@ -1,37 +1,32 @@
-# Requirements — Milestone v1.3
+# Requirements — Milestone v1.5
 
-> Especificação de requisitos para o Marco v1.3: Chrome Built-in AI, Modos de Reunião & Otimizações de Áudio.
-
----
-
-## v1.3 Requirements
-
-### Chrome Built-in AI (Pré-processador Inteligente Local)
-- [x] **CHROME-01**: A extensão utiliza a Prompt API (`window.ai.languageModel`) para realizar a correção ortográfica local de termos técnicos e jargões na transcrição do Whisper.
-- [x] **CHROME-02**: O módulo local realiza sumarização incremental contínua do histórico da conversa para compressão de tokens e classificação de categoria antes do envio ao Orquestrador.
-- [x] **CHROME-03**: A extensão lida graciosamente com a indisponibilidade da API `window.ai` desativando o pré-processamento on-device sem interromper o fluxo com o Orquestrador/Gemini Flash.
-
-
-### Modos de Reunião Adaptativos & Contexto
-- [x] **MODE-01**: O usuário pode selecionar o modo de reunião ativo no painel/popup entre: Entrevista Técnica, System Design, Code Review e Reunião Geral.
-- [x] **MODE-02**: O orquestrador ajusta dinamicamente os prompts de sistema e heurísticas de resposta com base no modo de reunião selecionado.
-- [x] **MODE-03**: O usuário pode fornecer notas ou documentos de contexto específicos para o modo ativo (ex: requisitos da vaga ou diretrizes do projeto).
-
-### Pipeline de Áudio & VAD (Voice Activity Detection)
-- [x] **AUDIO-01**: O serviço de transcrição Whisper utiliza Silero VAD (`vad_filter=True`) para descartar trechos de silêncio e ruído antes do reconhecimento de fala.
-- [x] **AUDIO-02**: O Offscreen Document descarta pacotes de áudio PCM abaixo do limiar de energia (RMS Energy Gate) para poupar uso de CPU e tráfego WebSocket.
+> Especificação de requisitos para o Marco v1.5: Supressão de Ruído Avançada, Diagnósticos de Latência & Atalhos Globais.
 
 ---
 
-## Future Requirements (Deferred)
-- [x] **CHROME-04**: Suporte à Writer API e Rewriter API para reescrever respostas curtas diretamente no HUD.
-- [ ] **AUDIO-03**: Supressão de ruído por redes neurais (RNNoise) no áudio antes do envio ao servidor.
+## v1.5 Requirements
+
+### Supressão de Ruído Avançada & Filtros DSP
+- [ ] **AUDIO-03**: O Offscreen Document / AudioWorklet aplica um filtro de supressão de ruído (DynamicsCompressor & BiquadFilter DSP / RNNoise) para eliminar ruído ambiente pesado de fundo.
+
+### Métrica & Painel de Diagnósticos de Latência
+- [ ] **DIAG-01**: O painel HUD exibe métricas de latência end-to-end em tempo real (tempo de transcrição Whisper, tempo de inferência LLM e latência de rede WebSocket em ms).
+
+### Atalhos de Teclado Globais & Comandos do Chrome
+- [ ] **SHORTCUT-01**: Suporte a atalhos de teclado globais configuráveis (`chrome.commands`) para forçar resposta de IA (`Alt+A`), alternar gravação (`Alt+R`) e alternar leitura TTS (`Alt+S`).
 
 ---
 
-## Out of Scope
-- Processamento de vídeo ou visão computacional no Gemini Nano — *Escopo estritamente focado em áudio e texto*.
-- Fine-tuning do modelo on-device — *Modelos do Chrome Built-in AI são imutáveis e gerenciados pelo próprio navegador*.
+## Completed Requirements (Milestones v1.0 - v1.4)
+- [x] **CHROME-01**: A extensão utiliza a Prompt API (`window.ai.languageModel`) para correção ortográfica local.
+- [x] **CHROME-02**: Sumarização incremental contínua do histórico da conversa.
+- [x] **CHROME-03**: Fallback gracioso na ausência de `window.ai`.
+- [x] **CHROME-04**: Suporte à Writer API e Rewriter API para reescrever respostas diretamente no HUD.
+- [x] **MODE-01**: Seleção de modo de reunião ativo no painel/popup.
+- [x] **MODE-02**: Prompts de sistema adaptativos no Orquestrador.
+- [x] **MODE-03**: Notas de apoio em Markdown por modo de reunião.
+- [x] **AUDIO-01**: Silero VAD nativo (`vad_filter=True`) no servidor Whisper.
+- [x] **AUDIO-02**: RMS Energy Gate no AudioWorklet para descarte local de silêncio.
 
 ---
 
@@ -48,3 +43,6 @@
 | AUDIO-01 | Phase 9 | Completed |
 | AUDIO-02 | Phase 9 | Completed |
 | CHROME-04 | Phase 10 | Completed |
+| AUDIO-03 | Phase 11 | Pending |
+| DIAG-01 | Phase 12 | Pending |
+| SHORTCUT-01 | Phase 13 | Pending |
