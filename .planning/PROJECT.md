@@ -22,10 +22,14 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 
 ---
 
-## Current State
+## Current Milestone: v1.3 Chrome Built-in AI, Modos de Reunião & Otimizações de Áudio
 
-- **Shipped Version**: `v1.2` (Histórico, Busca, IA & Redesign UX/UI) — Concluído em 28/07/2026.
-- **Destaques**: 4 widgets HUD flutuantes em Shadow DOM, suporte a múltiplos LLMs (nuvem e offline), histórico com busca textual e atalhos de teclado.
+**Goal:** Integrar a IA nativa do Chrome (Gemini Nano) para inferência local zero-latency sem API keys, expandir a inteligência de contexto com modos adaptativos de reunião e aprimorar o VAD/latência do áudio Whisper.
+
+**Target features:**
+- Provedor nativo Chrome Built-in AI (Prompt API e Writer API) em `AnswerProviderManager`.
+- Modos de Reunião Adaptativos (Entrevista Técnica, System Design, Code Review, Alinhamento) com injeção de contexto customizado.
+- Otimização do pipeline de áudio & Whisper com Voice Activity Detection (VAD) e controle dinâmico de latência.
 
 ---
 
@@ -56,9 +60,11 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **UI-03 (v1.2)**: Design System `MASTER.md` (dark OLED glassmorphism, fonte Inter, ícones Lucide SVG) — Validated em Phase 6
 - ✓ **UI-04 (v1.2)**: Destaque visual por sentença no TTS e 4 modos de layout visual — Validated em Phase 6
 
-### Active (Próximo Marco)
+### Active (Milestone v1.3: Chrome Built-in AI, Modos de Reunião & Áudio)
 
-*(A ser definido via `/gsd-new-milestone`)*
+- **AI-06**: Suporte ao provedor nativo Chrome Built-in AI (Gemini Nano) via Prompt API e Writer API no `AnswerProviderManager`
+- **CTX-01**: Modos de Reunião Adaptativos (Entrevista Técnica, System Design, Code Review, Alinhamento) com contexto configurável
+- **AUDIO-01**: Otimização do pipeline de áudio com Voice Activity Detection (VAD) e refinamento de latência do Whisper
 
 ### Out of Scope (Fora do Escopo Inicial)
 

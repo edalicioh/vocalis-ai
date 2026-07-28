@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: — Histórico, Busca, IA & Redesign UX/UI
-status: archived
-last_updated: "2026-07-28T11:03:00.000Z"
+milestone: v1.3
+milestone_name: Chrome Built-in AI, Modos de Reunião & Otimizações de Áudio
+status: defining_requirements
+last_updated: "2026-07-28T14:52:00.000Z"
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State — conversation-copilot
@@ -20,9 +20,10 @@ progress:
 
 ## Current Status
 
-- **Current Milestone**: Milestone v1.2 — Histórico, Busca, IA & Redesign UX/UI (SHIPPED)
-- **Status**: Concluído e Arquivado
-- **Next Step**: Executar `/gsd-new-milestone` para iniciar a definição do Milestone v1.3 / v2.0
+- **Current Milestone**: Milestone v1.3 — Chrome Built-in AI, Modos de Reunião & Otimizações de Áudio
+- **Status**: Definindo requisitos e Roadmap
+- **Next Step**: Definir requisitos detalhados e gerar o Roadmap em fases (`REQUIREMENTS.md` / `ROADMAP.md`)
+
 
 ---
 
