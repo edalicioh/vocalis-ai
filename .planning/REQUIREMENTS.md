@@ -18,8 +18,8 @@
 - [x] **MODE-03**: O usuário pode fornecer notas ou documentos de contexto específicos para o modo ativo (ex: requisitos da vaga ou diretrizes do projeto).
 
 ### Pipeline de Áudio & VAD (Voice Activity Detection)
-- [ ] **AUDIO-01**: O serviço de transcrição Whisper utiliza Silero VAD (`vad_filter=True`) para descartar trechos de silêncio e ruído antes do reconhecimento de fala.
-- [ ] **AUDIO-02**: O Offscreen Document descarta pacotes de áudio PCM abaixo do limiar de energia (RMS Energy Gate) para poupar uso de CPU e tráfego WebSocket.
+- [x] **AUDIO-01**: O serviço de transcrição Whisper utiliza Silero VAD (`vad_filter=True`) para descartar trechos de silêncio e ruído antes do reconhecimento de fala.
+- [x] **AUDIO-02**: O Offscreen Document descarta pacotes de áudio PCM abaixo do limiar de energia (RMS Energy Gate) para poupar uso de CPU e tráfego WebSocket.
 
 ---
 
@@ -45,5 +45,5 @@
 | MODE-01 | Phase 8 | Completed |
 | MODE-02 | Phase 8 | Completed |
 | MODE-03 | Phase 8 | Completed |
-| AUDIO-01 | Phase 9 | Pending |
-| AUDIO-02 | Phase 9 | Pending |
+| AUDIO-01 | Phase 9 | Completed |
+| AUDIO-02 | Phase 9 | Completed |

@@ -38,13 +38,15 @@ Plans:
 
 ---
 
-### Phase 9: Pipeline de Áudio & Silero VAD / Otimização de Latência
-**Goal:** Integrar o Silero VAD no serviço de transcrição Python (`faster-whisper`) e o RMS Energy Gate no Offscreen AudioWorklet para desconsiderar silêncio/ruídos e otimizar latência e consumo de CPU.
+### Phase 9: Pipeline de Áudio & Silero VAD (Voice Activity Detection)
+**Goal:** Implementar otimizações de áudio com Silero VAD (`vad_filter=True`) no backend Python, RMS Energy Gate no cliente AudioWorklet, feedback visual no HUD e controle de sensibilidade.
 **Requirements:** `AUDIO-01`, `AUDIO-02`
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (gerado via `/gsd-plan-phase 9`)
+- [x] 09-01-PLAN.md — Silero VAD no Serviço Whisper (Backend Python)
+- [x] 09-02-PLAN.md — RMS Energy Gate no AudioWorklet & Offscreen Document
+- [x] 09-03-PLAN.md — Indicador Visual de Voz Ativa & Sensibilidade nas Configurações
 
 
 ---
