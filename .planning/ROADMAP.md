@@ -12,9 +12,36 @@
 
 ---
 
-## Future Milestones
+## Current Milestone: v1.3 Chrome Built-in AI Pré-processador, Modos de Reunião & Áudio
 
-*(Execute `/gsd-new-milestone` para definir o próximo marco de desenvolvimento)*
+### Phase 7: Chrome Built-in AI como Pré-processador Inteligente Local
+**Goal:** Implementar o módulo `ChromeBuiltInAIProcessor` (Prompt API) para correção de jargões técnicos da transcrição Whisper, sumarização incremental da conversa e classificação de categoria on-device sem custo ou latência de nuvem.
+**Requirements:** `CHROME-01`, `CHROME-02`, `CHROME-03`
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (gerado via `/gsd-plan-phase 7`)
+
+---
+
+### Phase 8: Modos de Reunião Adaptativos & Contexto Customizado
+**Goal:** Introduzir o seletor de Modos de Reunião (Entrevista Técnica, System Design, Code Review, Reunião Geral) no HUD/Popup e adaptar dinamicamente as diretrizes de prompt e contexto do Orquestrador.
+**Requirements:** `MODE-01`, `MODE-02`, `MODE-03`
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (gerado via `/gsd-plan-phase 8`)
+
+---
+
+### Phase 9: Pipeline de Áudio & Silero VAD / Otimização de Latência
+**Goal:** Integrar o Silero VAD no serviço de transcrição Python (`faster-whisper`) e o RMS Energy Gate no Offscreen AudioWorklet para desconsiderar silêncio/ruídos e otimizar latência e consumo de CPU.
+**Requirements:** `AUDIO-01`, `AUDIO-02`
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (gerado via `/gsd-plan-phase 9`)
+
 
 ---
 
