@@ -143,4 +143,3 @@ const pageCardStyle: React.CSSProperties = {
 // ============================================================
 const root = createRoot(document.getElementById('popup-root')!);
 root.render(<PopupSettings />);
-

@@ -6,6 +6,12 @@ Real-time conversation copilot: Chrome extension captures meeting audio, sends i
 
 **Language**: All code comments, docs, and UI text are in Brazilian Portuguese.
 
+## Regras de Execução & Validação do Agente (MANDATÓRIO)
+
+- **Cheque de Compilação & Testes Obrigatório**: **APÓS QUALQUER ALTERAÇÃO DE CÓDIGO** em qualquer arquivo do monorepo, o agente **DEVE OBRIGATORIAMENTE** executar os comandos de build e validação (`npm run build:types`, `npm run build:extension` e/ou `npm run build:orchestrator`) para comprovar que não há erros de compilação ou regressões de TypeScript antes de finalizar o atendimento.
+- **Ordem de Build**: Caso tenha alterado `packages/shared-types`, executar `npm run build:types` PRIMEIRO antes de compilar os outros pacotes.
+- **Idioma**: Todo texto de interface, comentários e documentação deve ser estritamente em Português do Brasil (`pt-BR`).
+
 ## Monorepo structure
 
 npm workspaces (`packages/*`, `apps/*`):
@@ -82,7 +88,7 @@ Key env vars: `WHISPER_MODEL` (default `small`), `WHISPER_DEVICE`, `WHISPER_COMP
 
 ## Testing
 
-No test framework or test files exist in this repo yet. No lint or formatter config at project level.
+- **Regra Obrigatória**: Após qualquer alteração de código, rodar a suíte de build e testes para garantir que nada foi quebrado.
 
 ## Gotchas
 

@@ -5,6 +5,7 @@
   "description": "Assistente em tempo real para reuniões e entrevistas técnicas com transcrição local e sugestões de IA.",
   "permissions": [
     "tabCapture",
+    "desktopCapture",
     "offscreen",
     "storage",
     "activeTab",

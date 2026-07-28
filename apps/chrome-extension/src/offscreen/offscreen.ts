@@ -44,13 +44,13 @@ chrome.runtime.onMessage.addListener((message) => {
         ws.send(JSON.stringify({ type: 'session.register', sessionId: activeSessionId, payload: {} }));
       }
     }
-    startCapture(message.streamId);
+    startCapture(message.streamId, message.mediaSource === 'desktop' ? 'desktop' : 'tab');
   } else if (message.type === 'STOP_AUDIO_CAPTURE') {
     stopCapture();
   }
 });
 
-async function startCapture(streamId: string) {
+async function startCapture(streamId: string, mediaSource: 'tab' | 'desktop') {
   try {
     stopCapture(false);
 
@@ -59,7 +59,7 @@ async function startCapture(streamId: string) {
       audio: {
         // @ts-ignore
         mandatory: {
-          chromeMediaSource: 'tab',
+          chromeMediaSource: mediaSource,
           chromeMediaSourceId: streamId
         }
       },

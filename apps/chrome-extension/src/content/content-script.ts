@@ -133,4 +133,3 @@ if (document.readyState === 'loading') {
 } else {
   checkAndApplyActivation();
 }
-

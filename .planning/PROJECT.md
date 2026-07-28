@@ -1,6 +1,6 @@
 # Copiloto de Conversas e Entrevistas Técnicas
 
-> Assistente local integrado ao navegador que captura áudio de reuniões em tempo real, realiza transcrição via Whisper local, detecta perguntas e gera sugestões contextuais curtas via Gemini em um painel flutuante sobre a conversa.
+> Assistente local integrado ao navegador que captura áudio de reuniões em tempo real, realiza transcrição via Whisper local, detecta perguntas e gera sugestões contextuais curtas via Gemini/OpenAI/Anthropic/Ollama em 4 widgets HUD flutuantes sobre a conversa.
 
 ---
 
@@ -13,12 +13,19 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 ## Context
 
 - **Problema**: Acompanhar entrevistas técnicas ou reuniões densas exige lembrar conceitos rapidamente e estruturar respostas sem perder o foco na conversa ao vivo.
-- **Solução**: Uma extensão Chrome acoplada a um orquestrador local e serviço Whisper que transcrevem e analisam a fala continuada, sugerindo respostas pontuais e palavras-chave em um painel flutuante adaptável.
+- **Solução**: Uma extensão Chrome acoplada a um orquestrador local e serviço Whisper que transcrevem e analisam a fala continuada, sugerindo respostas pontuais e palavras-chave em 4 widgets flutuantes HUD adaptáveis.
 - **Restrições Principais**:
   - Processamento de transcrição 100% local com `faster-whisper` (privacidade e latência).
   - Interface injetada via Shadow DOM para evitar conflitos de CSS com Google Meet, Zoom ou Teams.
-  - Provedor de IA substituível (`AnswerProvider` desacoplado).
+  - Provedores de IA substituíveis (`AnswerProvider` desacoplado: Gemini, OpenAI, Anthropic, Ollama).
   - Idioma único: Português do Brasil (`pt-BR`).
+
+---
+
+## Current State
+
+- **Shipped Version**: `v1.2` (Histórico, Busca, IA & Redesign UX/UI) — Concluído em 28/07/2026.
+- **Destaques**: 4 widgets HUD flutuantes em Shadow DOM, suporte a múltiplos LLMs (nuvem e offline), histórico com busca textual e atalhos de teclado.
 
 ---
 
@@ -44,10 +51,14 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 - ✓ **HIST-02**: Busca textual rápida por palavras-chave nas reuniões e atas gravadas — Validated em Phase 4
 - ✓ **AI-04**: Suporte ao provedor OpenAI (GPT-4o) e Anthropic (Claude 3.5) via `AnswerProvider` — Validated em Phase 5
 - ✓ **AI-05**: Suporte a modelos de IA locais via Ollama (Llama 3 / Mistral) — Validated em Phase 5
+- ✓ **UI-01 (v1.2)**: Decomposição do overlay monolítico em 4 widgets HUD flutuantes independentes — Validated em Phase 6
+- ✓ **UI-02 (v1.2)**: Arraste livre (`drag-to-move`), minimização e persistência de posições dos 4 widgets em `localStorage` — Validated em Phase 6
+- ✓ **UI-03 (v1.2)**: Design System `MASTER.md` (dark OLED glassmorphism, fonte Inter, ícones Lucide SVG) — Validated em Phase 6
+- ✓ **UI-04 (v1.2)**: Destaque visual por sentença no TTS e 4 modos de layout visual — Validated em Phase 6
 
-### Active (Fase Atual & Próximas Melhorias)
+### Active (Próximo Marco)
 
-*Todas as melhorias do Milestone v1.2 foram concluídas com sucesso.*
+*(A ser definido via `/gsd-new-milestone`)*
 
 ### Out of Scope (Fora do Escopo Inicial)
 
@@ -65,18 +76,11 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 | Shadow DOM no Content Script | Isolar CSS da extensão das páginas hospedeiras (Meet, Teams) | Injeção via `React.CSSProperties` e `<style>` internas |
 | WebSocket com notação de ponto | Padronizar protocolo bidirecional entre extensão, orquestrador e Whisper | Schema unificado em `packages/shared-types` |
 | `faster-whisper` local em Docker | Manter privacidade do áudio e reduzir latência de rede | Containers com perfis GPU (CUDA) e CPU |
-| Provedor de IA com interface `AnswerProvider` | Permitir alternar entre Gemini e outros provedores de LLM | `gemini.ts` implementa a interface abstrata |
+| Provedores de IA via `AnswerProvider` | Suportar Gemini, OpenAI, Anthropic e Ollama local | Alternância dinâmica no `AnswerProviderManager` |
+| Arquitetura HUD de 4 Widgets | Modularizar a experiência visual do copiloto | 4 widgets independentes com Lucide icons e layout configurável |
 
 ---
 
 ## Evolution
 
-Este documento evolui a cada transição de fase ou marco concluído.
-
-**Após cada transição de fase** (via `/gsd-transition`):
-1. Requisitos validados? → Mover de Active para Validated
-2. Novos requisitos emergiram? → Adicionar a Active
-3. Decisões tomadas? → Adicionar a Key Decisions
-
----
-*Last updated: 2026-07-27 após inicialização do projeto GSD*
+*Last updated: 2026-07-28 após conclusão e arquivamento do Milestone v1.2*
