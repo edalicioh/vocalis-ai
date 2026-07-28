@@ -59,10 +59,11 @@ Plans:
 - [Chrome Built-in AI Documentation](https://developer.chrome.com/docs/ai/built-in?hl=pt-br)
 - [Google Generative AI Prohibited Use Policy](https://policies.google.com/terms/generative-ai/use-policy)
 **Requirements:** `CHROME-04`
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (gerado via `/gsd-plan-phase 10`)
+- [x] 10-01-PLAN.md — Módulo ChromeRewriterProcessor com Estratégia Híbrida
+- [x] 10-02-PLAN.md — Barra de Chips de Reescrita Rápida & Botão Desfazer no HUD
 
 ---
 

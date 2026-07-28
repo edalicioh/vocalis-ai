@@ -24,7 +24,7 @@
 ---
 
 ## Future Requirements (Deferred)
-- [ ] **CHROME-04**: Suporte à Writer API e Rewriter API para reescrever respostas curtas diretamente no HUD.
+- [x] **CHROME-04**: Suporte à Writer API e Rewriter API para reescrever respostas curtas diretamente no HUD.
 - [ ] **AUDIO-03**: Supressão de ruído por redes neurais (RNNoise) no áudio antes do envio ao servidor.
 
 ---
@@ -47,4 +47,4 @@
 | MODE-03 | Phase 8 | Completed |
 | AUDIO-01 | Phase 9 | Completed |
 | AUDIO-02 | Phase 9 | Completed |
-| CHROME-04 | Phase 10 | Pending |
+| CHROME-04 | Phase 10 | Completed |
