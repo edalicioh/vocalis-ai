@@ -47,3 +47,4 @@
 | MODE-03 | Phase 8 | Completed |
 | AUDIO-01 | Phase 9 | Completed |
 | AUDIO-02 | Phase 9 | Completed |
+| CHROME-04 | Phase 10 | Pending |

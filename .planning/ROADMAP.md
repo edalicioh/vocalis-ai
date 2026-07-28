@@ -51,18 +51,22 @@ Plans:
 
 ---
 
-## Backlog
+## Milestone v1.4: Writer & Rewriter API On-device (Gemini Nano)
 
-### Phase 999.1: Integração com Chrome Built-in AI / Gemini Nano (BACKLOG)
-
-**Goal:** Suportar inferência local no navegador via Chrome Built-in AI APIs (Prompt API, Writer API / Rewriter API) integradas ao Gemini Nano no Chrome, em conformidade com as diretrizes e políticas de uso do Google Generative AI.
+### Phase 10: Writer & Rewriter API com Gemini Nano
+**Goal:** Suportar reescrita e refinamento direto no navegador via Writer API e Rewriter API no Gemini Nano, permitindo ajustar o tom, concisão e estilo das sugestões no HUD sem requisição à nuvem.
 **Context & References:**
 - [Chrome Built-in AI Documentation](https://developer.chrome.com/docs/ai/built-in?hl=pt-br)
 - [Google Generative AI Prohibited Use Policy](https://policies.google.com/terms/generative-ai/use-policy)
-- Writer API / Prompt API em Gemini Nano para redação e respostas sem depender do servidor local/remoto.
-**Requirements:** TBD
+**Requirements:** `CHROME-04`
 **Plans:** 0 plans
 
 Plans:
-- [ ] TBD (promover com /gsd-review-backlog quando pronto)
+- [ ] TBD (gerado via `/gsd-plan-phase 10`)
+
+---
+
+## Backlog
+
+*(Nenhum item pendente no backlog no momento)*
 
