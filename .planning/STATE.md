@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Writer & Rewriter API On-device (Gemini Nano)
-status: phase_completed
-last_updated: "2026-07-28T17:37:00.000Z"
+status: milestone_completed
+last_updated: "2026-07-28T17:39:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -21,8 +21,8 @@ progress:
 ## Current Status
 
 - **Current Milestone**: Milestone v1.4 — Writer & Rewriter API On-device (Gemini Nano)
-- **Status**: Fase 10 Concluída com 100% de Sucesso (`CHROME-04`)
-- **Next Step**: Concluir marco ou adicionar novos requisitos no Backlog
+- **Status**: Marco v1.3 & v1.4 Concluídos com 100% de Sucesso (Fases 7, 8, 9 e 10 Concluídas)
+- **Next Step**: Iniciar novo marco com `/gsd-new-milestone` ou explorar novas funcionalidades no Backlog
 
 
 ---
