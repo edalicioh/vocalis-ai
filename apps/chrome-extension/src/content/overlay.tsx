@@ -13,7 +13,8 @@ import {
   AnswerCompletedPayload,
   SavedConversation,
   ToneUpdatePayload,
-  ConversationTone
+  ConversationTone,
+  MeetingMode
 } from '@conversation-copilot/shared-types';
 import { saveConversation, triggerMarkdownDownload } from '../shared/conversation-storage';
 import {
@@ -74,6 +75,27 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
   const [tone, setTone] = useState<ConversationTone>('neutro');
   const [toneConfidence, setToneConfidence] = useState<number>(0.5);
   const [toneSummary, setToneSummary] = useState<string>('');
+
+  // --- Modo de Reunião ---
+  const [meetingMode, setMeetingMode] = useState<MeetingMode>(() => {
+    return (localStorage.getItem('copilotMeetingMode') as MeetingMode) || 'technical_interview';
+  });
+
+  const [isAudioActive, setIsAudioActive] = useState(false);
+
+  const handleChangeMeetingMode = (newMode: MeetingMode) => {
+    setMeetingMode(newMode);
+    localStorage.setItem('copilotMeetingMode', newMode);
+    const storedNotes = localStorage.getItem('copilotModeNotes');
+    let modeNotes = {};
+    if (storedNotes) {
+      try { modeNotes = JSON.parse(storedNotes); } catch (e) {}
+    }
+    sendWsMessage({
+      type: 'settings.update',
+      payload: { meetingMode: newMode, modeNotes }
+    });
+  };
 
   // --- TTS State ---
   const [isTtsMuted, setIsTtsMuted] = useState(false);
@@ -227,6 +249,13 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
       }
     };
 
+    const handleRuntimeMessage = (msg: any) => {
+      if (msg.type === 'AUDIO_VAD_STATE') {
+        setIsAudioActive(msg.isAudioActive === true);
+      }
+    };
+    chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+
     window.addEventListener('copilot:force-trigger', handleForceTrigger);
     window.addEventListener('copilot:capture-state-changed', handleCaptureStateChange);
     window.addEventListener('keydown', handleKeyDown);
@@ -234,6 +263,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
     return () => {
       wsRef.current?.close();
       speechManager.cancel();
+      chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
       window.removeEventListener('copilot:force-trigger', handleForceTrigger);
       window.removeEventListener('copilot:capture-state-changed', handleCaptureStateChange);
       window.removeEventListener('keydown', handleKeyDown);
@@ -508,6 +538,9 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
           tone={tone}
           toneConfidence={toneConfidence}
           toneSummary={toneSummary}
+          meetingMode={meetingMode}
+          onChangeMeetingMode={handleChangeMeetingMode}
+          isAudioActive={isAudioActive}
         />
       )}
 

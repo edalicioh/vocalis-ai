@@ -12,8 +12,31 @@ export class OpenAIProvider implements AnswerProvider {
     this.model = model;
   }
 
+  public getModel(): string {
+    return this.model;
+  }
+
   public isConfigured(): boolean {
     return Boolean(this.apiKey && this.apiKey.trim().length > 0);
+  }
+
+  public async listModels(apiKey?: string): Promise<string[]> {
+    const key = apiKey || this.apiKey;
+    if (!key) return ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1-mini', 'o1-preview'];
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${key}` }
+      });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const json = await res.json();
+      const models: string[] = (json.data || [])
+        .map((m: any) => m.id)
+        .filter((id: string) => id && (id.startsWith('gpt-') || id.startsWith('o1-')));
+      return models.length > 0 ? models : ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'];
+    } catch {
+      return ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'];
+    }
   }
 
   public async *generate(input: AnswerInput): AsyncIterable<AnswerEvent> {

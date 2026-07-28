@@ -78,4 +78,9 @@ export interface AnswerProvider {
    * Verifica se o provedor está configurado (ex: API key presente).
    */
   isConfigured(): boolean;
+
+  /**
+   * Consulta dinamicamente a lista de modelos liberados via API (opcional).
+   */
+  listModels?(apiKey?: string, endpoint?: string): Promise<string[]>;
 }

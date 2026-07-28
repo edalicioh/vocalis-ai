@@ -18,7 +18,8 @@ import {
   Utterance,
   ResponseMode,
   StatusUpdatePayload,
-  QuestionMetrics
+  QuestionMetrics,
+  AIProvider
 } from '@conversation-copilot/shared-types';
 
 dotenv.config();
@@ -362,6 +363,19 @@ async function startServer() {
     };
   });
 
+  // Rota para listagem dinâmica de modelos liberados por API
+  server.get('/api/models', async (request, reply) => {
+    const query = request.query as { provider?: AIProvider; apiKey?: string; endpoint?: string };
+    const provider = query.provider || 'gemini';
+    try {
+      const models = await providerManager.fetchAvailableModels(provider, query.apiKey, query.endpoint);
+      return { status: 'ok', provider, models };
+    } catch (err: any) {
+      server.log.error(err, 'Erro ao consultar modelos dinâmicos da API');
+      return reply.status(500).send({ status: 'error', error: err?.message || 'Falha ao buscar modelos' });
+    }
+  });
+
   // WebSocket endpoint
   server.register(async function (fastify) {
     fastify.get('/ws', { websocket: true }, (connection: any) => {
@@ -422,6 +436,15 @@ async function startServer() {
               activeAudioSessionId = targetSessionId;
               receivedChunksCount = 0;
               totalAudioBytes = 0;
+
+              const settings = msg.payload as Partial<Settings> | undefined;
+              if (settings) {
+                const cm = getContextManager(targetSessionId);
+                if (settings.meetingMode) {
+                  cm.setMeetingMode(settings.meetingMode, settings.modeNotes);
+                }
+              }
+
               server.log.info({ sessionId: targetSessionId }, '🟢 [Sessão] Iniciada com sucesso.');
               broadcastStatus(targetSessionId);
               break;
@@ -490,9 +513,12 @@ async function startServer() {
             case 'settings.update': {
               const targetSessionId = msg.sessionId || socketSessionMap.get(socket);
               const settings = msg.payload as Partial<Settings>;
-              server.log.info({ responseMode: settings.responseMode, aiProvider: settings.aiProvider, targetSessionId }, '⚙️ [Configurações] Atualizadas');
+              server.log.info({ responseMode: settings.responseMode, aiProvider: settings.aiProvider, meetingMode: settings.meetingMode, targetSessionId }, '⚙️ [Configurações] Atualizadas');
 
               const cm = getContextManager(targetSessionId);
+              if (settings.meetingMode) {
+                cm.setMeetingMode(settings.meetingMode, settings.modeNotes);
+              }
               providerManager.updateSettings(settings);
               if (settings.userProfile) {
                 cm.updateProfile(settings.userProfile);

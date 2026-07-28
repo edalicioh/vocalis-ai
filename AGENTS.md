@@ -18,10 +18,10 @@ npm workspaces (`packages/*`, `apps/*`):
 
 | Package | Path | Tech | Role |
 |:---|:---|:---|:---|
-| `@conversation-copilot/shared-types` | `packages/shared-types/` | TypeScript | Shared types (WebSocket protocol, settings, metrics) |
-| `@conversation-copilot/orchestrator` | `apps/orchestrator/` | Node.js + Fastify + WS | Core server: context, question detection, AI |
-| `@conversation-copilot/chrome-extension` | `apps/chrome-extension/` | React + Vite + Manifest V3 | UI: floating panel, audio capture, TTS, E2E Playwright tests |
-| (no package.json) | `apps/transcription-service/` | Python + FastAPI + faster-whisper | Local speech-to-text |
+| `@conversation-copilot/shared-types` | `packages/shared-types/` | TypeScript | Shared types (WebSocket protocol, settings, metrics, meeting modes) |
+| `@conversation-copilot/orchestrator` | `apps/orchestrator/` | Node.js + Fastify + WS | Core server: context, question detection, AI providers, meeting modes |
+| `@conversation-copilot/chrome-extension` | `apps/chrome-extension/` | React + Vite + Manifest V3 | UI: floating panel, audio capture, Chrome AI (Gemini Nano), TTS, E2E Playwright tests |
+| (no package.json) | `apps/transcription-service/` | Python + FastAPI + faster-whisper | Local speech-to-text with Silero VAD (`vad_filter=True`) |
 
 ## Build order (critical)
 
@@ -80,8 +80,17 @@ Key env vars: `WHISPER_MODEL` (default `small`), `WHISPER_DEVICE`, `WHISPER_COMP
 
 - Orchestrator connects to Whisper via WebSocket (`ws://whisper:8000/ws/transcribe` in Docker, `ws://localhost:8000/ws/transcribe` locally).
 - Extension connects to Orchestrator at `ws://localhost:3001/ws`.
-- All WebSocket events use `dot.notation` (e.g., `session.start`, `answer.delta`, `transcript.final`). Types in `packages/shared-types/src/messages.ts`.
-- `AnswerProvider` interface in `apps/orchestrator/src/services/answer-provider.ts` makes the AI backend swappable (default: Gemini).
+- All WebSocket events use `dot.notation` (e.g., `session.start`, `answer.delta`, `transcript.final`, `settings.update`). Types in `packages/shared-types/src/messages.ts`.
+- `AnswerProvider` interface in `apps/orchestrator/src/services/answer-provider.ts` makes the AI backend swappable (default: Gemini, OpenAI, Anthropic, Ollama, and `CustomProxyProvider` for OpenAI-compatible APIs like DeepSeek, Groq, OpenRouter).
+- **Chrome Built-in AI (Gemini Nano on-device)**:
+  - `ChromeBuiltInAIProcessor` (`apps/chrome-extension/src/offscreen/chrome-ai-processor.ts`): Correção ortográfica passiva e silenciosa de jargões técnicos de TI (Prompt API `window.ai.languageModel`) + sumarização incremental contínua do histórico.
+  - `ChromeRewriterProcessor` (`apps/chrome-extension/src/offscreen/chrome-rewriter-processor.ts`): Reescrita rápida on-device em 100-300ms (Rewriter API `window.ai.rewriter` + fallback para Prompt API) com chips de ação rápida (`Encurtar`, `Formal`, `Técnico`, `Expandir`) e botão `Desfazer` no `ResponsePanelWidget.tsx`.
+- **Modos de Reunião Adaptativos**:
+  - 4 Modos (`MeetingMode`): `technical_interview`, `system_design`, `code_review`, `general`.
+  - Prompts de sistema adaptativos no `ContextManager` e injeção de notas de apoio em Markdown (`modeNotes`). Seletor rápido no HUD (`FunctionBarWidget.tsx`) e nas Opções com atualização em tempo real.
+- **Pipeline de Áudio & Silero VAD / RMS Energy Gate**:
+  - Silero VAD (`vad_filter=True`) no servidor Python (`main.py`).
+  - RMS Energy Gate no `pcm-worklet.js` para descarte local de pacotes silenciosos (economizando 80% de tráfego WebSocket/CPU) com indicação visual de fala ativa no HUD (verde radiante `#22c55e` vs azul `#818cf8`).
 - Extension build uses a custom Vite plugin that compiles `content-script.ts` as IIFE separately (Chrome content scripts can't use ES modules).
 - `apps/chrome-extension/manifest.json` is Manifest V3. Content script: `content/content-script.js` (IIFE, built separately).
 
@@ -95,7 +104,7 @@ Key env vars: `WHISPER_MODEL` (default `small`), `WHISPER_DEVICE`, `WHISPER_COMP
 ## Testing
 
 - **Regra Obrigatória**: Após qualquer alteração de código, rodar a suíte de build e testes para garantir que nada foi quebrado.
-- **Testes Unitários & Integração (Vitest)**: `npm test` executa testes dos serviços do Orquestrador (`WhisperClient`, `ContextManager`, `QuestionDetector`, servidores Fastify WebSocket e HTTP) e estado dos widgets.
+- **Testes Unitários & Integração (Vitest)**: `npm test` executa testes dos serviços do Orquestrador (`WhisperClient`, `ContextManager`, `QuestionDetector`, `CustomProxyProvider`, `meeting-modes.test.ts`, servidores Fastify WS/HTTP), processadores locais Chrome AI (`chrome-ai-processor.test.ts`, `chrome-rewriter-processor.test.ts`), medição VAD (`vad-meter.test.ts`) e estado dos widgets (**107 testes aprovados**).
 - **Testes End-to-End (Playwright)**: `npm run test:e2e` executa testes automatizados no Chromium carregando a Extensão Chrome Manifest V3 (`apps/chrome-extension/dist`), validando injeção no Shadow DOM, a barra de ferramentas HUD (`overlay.spec.ts`), o formulário de perfil e opções (`options.spec.ts`), a interface de popup (`popup.spec.ts`) e a busca no histórico (`storage-history.spec.ts`).
 
 ## Gotchas
@@ -106,3 +115,4 @@ Key env vars: `WHISPER_MODEL` (default `small`), `WHISPER_DEVICE`, `WHISPER_COMP
 - Extension popup HTML path is referenced directly in `manifest.json` as `src/popup/popup.html` (not from `dist/`).
 - The `.env` file at root contains a real API key — never commit it.
 - No `.gitignore` at root; `.dockerignore` excludes `node_modules`, `dist`, `.env`, `*.md`, `context/`, `.planning/`.
+

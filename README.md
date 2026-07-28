@@ -23,15 +23,15 @@ Assistente em tempo real que transcreve reuniões, detecta perguntas e sugere re
 
 ## Visão Geral
 
-O sistema captura o áudio de uma reunião no Chrome, transcreve localmente com faster-whisper, detecta perguntas automaticamente e gera sugestões contextuais via Google Gemini — exibidas em um painel flutuante sobre a reunião.
+O sistema captura o áudio de uma reunião no Chrome, filtra o silêncio localmente via RMS Energy Gate, transcreve com faster-whisper + Silero VAD, pré-processa jargões técnicos via **Chrome Built-in AI (Gemini Nano on-device)**, detecta perguntas automaticamente e gera sugestões contextuais adaptadas ao modo de reunião ativo — exibidas em um painel flutuante sobre a reunião com opção de reescrita instantânea local.
 
 ```
-Chrome (Google Meet/Teams) → Extensão Chrome → WebSocket → Orquestrador Node.js
-                                                              ├── Whisper (transcrição local)
-                                                              └── API Gemini (sugestões IA)
+Chrome (Meet/Teams) → Extensão Chrome (Shadow DOM + Gemini Nano Local) → WebSocket → Orquestrador Node.js
+                                                                                        ├── Whisper (Silero VAD)
+                                                                                        └── LLM (Gemini / Claude / Ollama)
 ```
 
-**Prioridades**: baixa latência (<3s), privacidade (áudio local), custo reduzido, respostas curtas.
+**Prioridades**: baixa latência (<3s), privacidade (áudio e pré-processamento local), otimização de banda/CPU (VAD RMS), respostas curtas e adaptativas.
 
 ---
 
@@ -39,10 +39,34 @@ Chrome (Google Meet/Teams) → Extensão Chrome → WebSocket → Orquestrador N
 
 | Componente | Tecnologia | Porta | Descrição |
 | :--- | :--- | :---: | :--- |
-| **Extensão Chrome** | React + TypeScript + Manifest V3 | — | Captura áudio, painel flutuante, TTS, E2E Playwright |
-| **Orquestrador** | Node.js + Fastify + WebSocket | `3001` | Núcleo do sistema: contexto, detecção, IA |
-| **Whisper** | Python + FastAPI + faster-whisper | `8000` | Transcrição local com GPU/CPU |
-| **API de IA** | Google Gemini (substituível) | externa | Geração de sugestões |
+| **Extensão Chrome** | React + TypeScript + Manifest V3 | — | Captura áudio PCM 16kHz, HUD em Shadow DOM, TTS, E2E Playwright |
+| **Chrome AI (Gemini Nano)** | Prompt API + Rewriter API (`window.ai`) | local | Pré-processador on-device: correção ortográfica, sumarização e reescrita instantânea |
+| **Orquestrador** | Node.js + Fastify + WebSocket | `3001` | Núcleo do sistema: gerenciador de contexto, detecção, modos de reunião e IA |
+| **Whisper (VAD)** | Python + FastAPI + faster-whisper | `8000` | Transcrição local com GPU/CPU e Silero VAD (`vad_filter=True`) |
+| **API de IA** | Gemini, OpenAI, Anthropic, Ollama ou Proxy Customizado (DeepSeek, Groq) | externa / local | Geração de sugestões contextuais |
+
+---
+
+## Recursos Principais
+
+### 🧠 Chrome Built-in AI (Gemini Nano On-Device)
+- **Correção Ortográfica de Jargões (`CHROME-01`)**: Correção silenciosa de termos de TI truncados (ex: Larabel -> Laravel, Vites -> Vitest, Fast-ify -> Fastify) via Prompt API antes de atingir o LLM.
+- **Sumarização Incremental Contínua (`CHROME-02`)**: Síntese do contexto da reunião a cada 5 frases ou 60s para compressão de tokens.
+- **Reescrita Instantânea no HUD (`CHROME-04`)**: Chips de ação rápida `[✂️ Encurtar]`, `[💼 Formal]`, `[💻 Técnico]` e `[📝 Expandir]` executados on-device em 100-300ms via Rewriter API / Prompt API com opção de `[↩️ Desfazer]`.
+
+### 🎯 Modos de Reunião Adaptativos & Contexto Customizado
+- **4 Modos Especializados (`MODE-01` & `MODE-02`)**:
+  - 🎯 **Entrevista Técnica**: Respostas diretas e objetivas em até 30s.
+  - 🏗️ **System Design**: Requisitos funcionais/não-funcionais, escalabilidade e diagramas Mermaid.
+  - 💻 **Code Review**: Padrões de projeto, qualidade de código, complexidade $O(N)$ e prevenção de bugs.
+  - 📝 **Reunião Geral**: Síntese de discussões, decisões tomadas e Action Items.
+- **Notas de Apoio em Markdown por Modo (`MODE-03`)**: Espaço dedicado para colar requisitos da vaga, regras de arquitetura ou diretrizes da empresa injetadas no prompt do LLM.
+
+### 🎙️ Pipeline de Áudio & Silero VAD / RMS Energy Gate
+- **Silero VAD Nativo (`AUDIO-01`)**: Filtro VAD nativo no `faster-whisper` (`min_silence_duration_ms=500, speech_pad_ms=400`) para descartar silêncios e ruídos de fundo antes do reconhecimento de fala.
+- **RMS Energy Gate Local (`AUDIO-02`)**: O AudioWorklet (`pcm-worklet.js`) mede a energia RMS de cada bloco PCM 16kHz e descarta pacotes silenciosos localmente, economizando **80% de tráfego de rede e CPU**.
+- **Indicador VAD no HUD**: Botão "Ouvindo" pulsa em verde radiante (`#22c55e`) durante a fala ativa e azul suave (`#818cf8`) em silêncio.
+- **Controle de Sensibilidade**: Opções de limiar RMS nas configurações: Baixa (0.02), Média (0.01 - Padrão), Alta (0.005) e Desativado (0.0).
 
 ---
 
@@ -238,6 +262,18 @@ npm run build:extension
    - **Dados da vaga** — título, requisitos, tecnologias.
 3. Clique em **Salvar Configurações**.
 
+### Provedores de IA Suportados
+
+O Orquestrador utiliza uma abstração desacoplada (`AnswerProvider`) que permite chavear facilmente entre múltiplos provedores de inteligência artificial:
+
+| Provedor | Tipo | Requisitos | Exemplo de Uso |
+| :--- | :--- | :--- | :--- |
+| **✨ Google Gemini** | Nuvem | `GEMINI_API_KEY` | Gemini 1.5 Flash / Pro (padrão) |
+| **🤖 OpenAI** | Nuvem | `openaiApiKey` | GPT-4o, GPT-4o-mini |
+| **🧠 Anthropic** | Nuvem | `anthropicApiKey` | Claude 3.5 Sonnet, Claude 3 Haiku |
+| **🏠 Ollama Local** | Local | `ollamaEndpoint` | Llama 3, Mistral, Codestral (100% offline) |
+| **🌐 Proxy Agnóstico / API Customizada** | Nuvem / Local | `customProxyEndpoint`, `customProxyApiKey` | DeepSeek (`deepseek-chat`), Groq, OpenRouter, LM Studio |
+
 ### Modos de resposta
 
 | Modo | Descrição | Uso recomendado |
@@ -271,7 +307,7 @@ O projeto utiliza duas ferramentas de testes automatizados para garantir qualida
 
 ### 1. Testes Unitários e de Integração (Vitest)
 
-Testam os componentes do Orquestrador (`WhisperClient`, `ContextManager`, `QuestionDetector`, `AnswerProviderManager`, rotas HTTP e WebSocket do Fastify) e utilitários de estado da extensão.
+Testam os componentes do Orquestrador (`WhisperClient`, `ContextManager`, `QuestionDetector`, `AnswerProviderManager`, `meeting-modes.test.ts`, servidores Fastify WS/HTTP), os processadores locais Chrome AI (`chrome-ai-processor.test.ts`, `chrome-rewriter-processor.test.ts`), medição de áudio VAD (`vad-meter.test.ts`) e o estado dos widgets (**107 testes aprovados**).
 
 ```bash
 # Executa a suíte de testes unitários e de integração
@@ -439,29 +475,29 @@ conversation-copilot/
 ├── apps/
 │   ├── chrome-extension/       # Extensão Chrome (React + Manifest V3)
 │   │   ├── e2e/                # Suíte de testes End-to-End (Playwright)
-│   │   │   ├── options.spec.ts
-│   │   │   ├── overlay.spec.ts
-│   │   │   ├── popup.spec.ts
-│   │   │   └── storage-history.spec.ts
+│   │   ├── public/             # Asset estático do pcm-worklet.js
 │   │   ├── src/
-│   │   │   ├── background/     # Service Worker
+│   │   │   ├── background/     # Service Worker (roteamento de mensagens)
 │   │   │   ├── content/        # Content Script + Overlay (Shadow DOM)
-│   │   │   ├── offscreen/      # Captura de áudio (Offscreen Document)
+│   │   │   │   ├── widgets/    # Widgets React (FunctionBar, ResponsePanel, etc)
+│   │   │   │   └── __tests__/  # Testes de widget e VAD meter
+│   │   │   ├── offscreen/      # Captura de áudio, AudioWorklet e Chrome AI
+│   │   │   │   ├── chrome-ai-processor.ts       # Correction & Summarization
+│   │   │   │   ├── chrome-rewriter-processor.ts # Quick Rewrite Engine
+│   │   │   │   └── pcm-worklet.js               # RMS Energy Gate Worklet
 │   │   │   ├── options/        # Página de opções e histórico
 │   │   │   ├── popup/          # Popup de configurações rápidas
-│   │   │   └── tts/            # Gerenciador de TTS
+│   │   │   └── shared/         # Componente SettingsForm com seletores
 │   │   ├── manifest.json
 │   │   └── vite.config.ts
 │   ├── orchestrator/           # Orquestrador Node.js (Fastify)
 │   │   ├── src/
 │   │   │   ├── server.ts       # Servidor principal Fastify / WS
-│   │   │   └── services/       # Serviços (IA, contexto, detecção, Whisper)
+│   │   │   └── services/       # Serviços (ContextManager, QuestionDetector, Gemini, OpenAI, Anthropic, Ollama, CustomProxy, Whisper)
 │   │   └── Dockerfile
 │   └── transcription-service/  # Serviço Whisper (Python + FastAPI)
-│       ├── main.py
-│       ├── requirements.txt
-│       ├── Dockerfile          # GPU (CUDA)
-│       └── Dockerfile.cpu      # CPU only
+│       ├── main.py             # FastAPI + faster-whisper (Silero VAD=True)
+│       └── Dockerfile          # GPU / CPU
 ├── packages/
 │   └── shared-types/           # Tipos TypeScript compartilhados
 ├── docker-compose.yml          # Orquestração dos containers

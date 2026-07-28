@@ -101,7 +101,17 @@ describe('Integração: QuestionDetector → ContextManager → AnswerProvider',
     expect(manager.getActiveProviderType()).toBe('ollama');
     expect(manager.getActiveProvider()).toBeInstanceOf(OllamaProvider);
 
-    // 6. Volta para Gemini
+    // 6. Troca para Proxy Agnóstico / API Customizada
+    manager.updateSettings({
+      aiProvider: 'custom_proxy',
+      customProxyEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
+      customProxyApiKey: 'gsk-test',
+      customProxyModel: 'llama-3.3-70b'
+    });
+    expect(manager.getActiveProviderType()).toBe('custom_proxy');
+    expect(manager.getActiveProvider().isConfigured()).toBe(true);
+
+    // 7. Volta para Gemini
     manager.updateSettings({ aiProvider: 'gemini' });
     expect(manager.getActiveProviderType()).toBe('gemini');
     expect(manager.getActiveProvider()).toBeInstanceOf(GeminiProvider);

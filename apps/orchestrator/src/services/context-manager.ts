@@ -5,7 +5,8 @@ import {
   ResponseMode,
   ConversationSummary,
   ConversationTone,
-  ToneUpdatePayload
+  ToneUpdatePayload,
+  MeetingMode
 } from '@conversation-copilot/shared-types';
 
 /**
@@ -55,6 +56,42 @@ export class ContextManager {
     summaryText: '',
     lastUpdated: 0
   };
+
+  private meetingMode: MeetingMode = 'technical_interview';
+  private modeNotes: Partial<Record<MeetingMode, string>> = {};
+
+  private readonly SYSTEM_PROMPTS: Record<MeetingMode, string> = {
+    technical_interview:
+      'MODO: ENTREVISTA TÉCNICA.\n' +
+      'Foco em respostas objetivas, diretas e faladas naturalmente em até 30s. Destaque conceitos chave e experiências do perfil.',
+    system_design:
+      'MODO: SYSTEM DESIGN & ARQUITETURA.\n' +
+      'Foco em requisitos funcionais/não-funcionais, trade-offs de arquitetura, escalabilidade, bancos de dados, gargalos e diagramas Mermaid se aplicável.',
+    code_review:
+      'MODO: CODE REVIEW & REFATORAÇÃO.\n' +
+      'Foco em qualidade de código, padrões de projeto (Clean Code/SOLID), complexidade de tempo/espaço (O(N)), potenciais bugs e segurança.',
+    general:
+      'MODO: REUNIÃO GERAL & ALINHAMENTO.\n' +
+      'Foco em síntese de discussões, decisões principais tomadas, direcionamentos e lista clara de Action Items (próximos passos).'
+  };
+
+  public setMeetingMode(mode: MeetingMode, notes?: Partial<Record<MeetingMode, string>> | string) {
+    this.meetingMode = mode;
+    if (typeof notes === 'string') {
+      this.modeNotes[mode] = notes;
+    } else if (notes) {
+      this.modeNotes = { ...this.modeNotes, ...notes };
+    }
+  }
+
+  public getMeetingMode(): MeetingMode {
+    return this.meetingMode;
+  }
+
+  public getModeNotes(mode?: MeetingMode): string {
+    const targetMode = mode || this.meetingMode;
+    return this.modeNotes[targetMode] || '';
+  }
 
   private readonly MAX_WINDOW_SIZE = 10;
   private readonly SUMMARY_TRIGGER_COUNT = 5;
@@ -313,11 +350,16 @@ Retorne em formato JSON:
       .join('\n');
 
     const modeInstruction = this.getResponseModeInstruction(responseMode);
+    const meetingModePrompt = this.SYSTEM_PROMPTS[this.meetingMode] || this.SYSTEM_PROMPTS['technical_interview'];
+    const activeModeNotes = this.modeNotes[this.meetingMode] ? `\n\n=== NOTAS DO USUÁRIO PARA ESTE MODO ===\n${this.modeNotes[this.meetingMode]}` : '';
 
     return `
 Você é um copiloto para conversas e entrevistas técnicas.
 
 Sua função é ajudar o usuário a estruturar uma resposta curta, natural e tecnicamente correta.
+
+=== DIRETRIZ DO MODO DE REUNIÃO ATIVO ===
+${meetingModePrompt}${activeModeNotes}
 
 === REGRAS OBRIGATÓRIAS (RN) ===
 - Não invente experiências profissionais do usuário (RN-004).

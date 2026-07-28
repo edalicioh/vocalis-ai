@@ -40,7 +40,12 @@ def _run_whisper_transcription(audio_data: np.ndarray):
         beam_size=3,
         language="pt",
         task="transcribe",
-        vad_filter=True
+        vad_filter=True,
+        vad_parameters=dict(
+            min_silence_duration_ms=500,
+            speech_pad_ms=400,
+            threshold=0.5
+        )
     )
     segments_list = list(segments)
     full_text = " ".join([seg.text.strip() for seg in segments_list if seg.text.strip()])

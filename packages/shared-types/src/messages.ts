@@ -22,6 +22,7 @@ export type MessageType =
   | 'session.error'
   | 'transcript.partial'
   | 'transcript.final'
+  | 'transcript.preprocessed'
   | 'question.detected'
   | 'answer.started'
   | 'answer.delta'
@@ -83,6 +84,12 @@ export interface JobDescription {
 }
 
 // ============================================================
+// Modos de Reunião Adaptativos — RF-020
+// ============================================================
+
+export type MeetingMode = 'technical_interview' | 'system_design' | 'code_review' | 'general';
+
+// ============================================================
 // Modos de Resposta — RF-017
 // ============================================================
 
@@ -104,21 +111,37 @@ export type PanelMode = 'compact' | 'normal' | 'keywords-only' | 'transcription-
 // Configurações — Expandidas
 // ============================================================
 
-export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama';
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama' | 'custom_proxy';
 
 export interface Settings {
   /** Provedor de IA ativo */
   aiProvider?: AIProvider;
+  /** Modo de reunião ativo (padrão: technical_interview) */
+  meetingMode?: MeetingMode;
+  /** Notas de apoio customizadas por modo */
+  modeNotes?: Partial<Record<MeetingMode, string>>;
   /** Chave da API (armazenada no backend — RNF-004) */
   geminiApiKey: string;
+  /** Modelo do Google Gemini (padrão: gemini-2.5-flash ou gemini-1.5-pro) */
+  geminiModel?: string;
   /** Chave da API OpenAI (GPT-4o) */
   openaiApiKey?: string;
+  /** Nome do modelo OpenAI (padrão: gpt-4o-mini ou gpt-4o) */
+  openaiModel?: string;
   /** Chave da API Anthropic (Claude 3.5 Sonnet) */
   anthropicApiKey?: string;
+  /** Nome do modelo Anthropic (padrão: claude-3-5-sonnet-20241022) */
+  anthropicModel?: string;
   /** URL do servidor Ollama Local (padrão: http://localhost:11434) */
   ollamaEndpoint?: string;
   /** Nome do modelo Ollama Local (padrão: llama3) */
   ollamaModel?: string;
+  /** Endpoint do Proxy LLM Agnóstico / API Customizada */
+  customProxyEndpoint?: string;
+  /** Chave de API / Bearer Token do Proxy Customizado */
+  customProxyApiKey?: string;
+  /** Nome do Modelo do Proxy Customizado (ex: deepseek-chat, llama-3.3-70b-versatile, etc.) */
+  customProxyModel?: string;
   /** Modo de resposta da IA — RF-017 */
   responseMode: ResponseMode;
   /** Modo do TTS — RF-013 */
@@ -157,6 +180,23 @@ export interface Utterance {
   start?: number;
   /** Timestamp de fim do trecho (segundos) */
   end?: number;
+}
+
+// ============================================================
+// Pré-processador Local — Chrome Built-in AI
+// ============================================================
+
+export interface ProcessedTranscriptPayload {
+  /** Texto original transcrito pelo Whisper */
+  originalText: string;
+  /** Texto corrigido pelo Gemini Nano (jargões e termos técnicos ajustados) */
+  correctedText: string;
+  /** Resumo incremental atualizado do contexto */
+  incrementalSummary?: string;
+  /** Categoria da conversa/pergunta (DevOps, System Design, Backend, etc) */
+  category?: string;
+  /** Indica se a transcrição passou pelo Gemini Nano ou se usou bypass */
+  isBypass: boolean;
 }
 
 // ============================================================

@@ -76,6 +76,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
+  if (message.type === 'CHROME_AI_STATUS_UPDATE' && message.status) {
+    chrome.storage.local.set({ chromeAiStatus: message.status });
+    sendResponse({ status: 'ok' });
+    return;
+  }
+
   if (message.type === 'GET_CAPTURE_STATE') {
     (async () => {
       const targetTabId = message.tabId || sender.tab?.id;

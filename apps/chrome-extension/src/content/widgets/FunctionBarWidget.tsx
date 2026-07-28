@@ -13,10 +13,14 @@ import {
   Check,
   Activity,
   AlertTriangle,
-  Pause
+  Pause,
+  Target,
+  Boxes,
+  Code2,
+  FileText
 } from 'lucide-react';
 import { WidgetPosition, HUDLayoutMode } from '../widget-state';
-import { StatusUpdatePayload, ConversationTone } from '@conversation-copilot/shared-types';
+import { StatusUpdatePayload, ConversationTone, MeetingMode } from '@conversation-copilot/shared-types';
 
 /** Mapa de cores por tom de conversa */
 const TONE_COLORS: Record<ConversationTone, { bg: string; text: string; label: string }> = {
@@ -27,6 +31,14 @@ const TONE_COLORS: Record<ConversationTone, { bg: string; text: string; label: s
   interessado: { bg: '#3b82f6', text: '#f8fafc', label: 'Interessado' },
   confuso:     { bg: '#a855f7', text: '#f8fafc', label: 'Confuso' },
   formal:      { bg: '#6366f1', text: '#f8fafc', label: 'Formal' }
+};
+
+/** Configurações de exibição dos modos de reunião */
+const MODE_INFO: Record<MeetingMode, { label: string; shortLabel: string; icon: React.ReactNode; color: string }> = {
+  technical_interview: { label: 'Entrevista Técnica', shortLabel: 'Entrevista', icon: <Target size={14} />, color: '#10b981' },
+  system_design:      { label: 'System Design',      shortLabel: 'Design',     icon: <Boxes size={14} />,  color: '#8b5cf6' },
+  code_review:        { label: 'Code Review',        shortLabel: 'Review',     icon: <Code2 size={14} />,  color: '#ec4899' },
+  general:            { label: 'Reunião Geral',      shortLabel: 'Geral',      icon: <FileText size={14} />, color: '#64748b' }
 };
 
 interface FunctionBarWidgetProps {
@@ -52,6 +64,9 @@ interface FunctionBarWidgetProps {
   tone?: ConversationTone;
   toneConfidence?: number;
   toneSummary?: string;
+  meetingMode?: MeetingMode;
+  onChangeMeetingMode?: (mode: MeetingMode) => void;
+  isAudioActive?: boolean;
 }
 
 export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
@@ -76,9 +91,12 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
   onOpacityChange,
   tone = 'neutro',
   toneConfidence = 0.5,
-  toneSummary = ''
+  toneSummary = '',
+  meetingMode = 'technical_interview',
+  onChangeMeetingMode,
+  isAudioActive = false
 }) => {
-  const [openMenu, setOpenMenu] = useState<'status' | 'audio' | 'visual' | 'more' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'status' | 'mode' | 'audio' | 'visual' | 'more' | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
 
   const opensUpward = position.y > (typeof window !== 'undefined' ? window.innerHeight / 2 : 400);
@@ -111,26 +129,34 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
     window.addEventListener('pointerup', handlePointerUp);
   };
 
-  const toggleMenu = (menu: 'status' | 'audio' | 'visual' | 'more') => {
+  const toggleMenu = (menu: 'status' | 'mode' | 'audio' | 'visual' | 'more') => {
     setOpenMenu(prev => (prev === menu ? null : menu));
   };
 
-  // Determina rótulo e ícone de estado de escuta/status
-  let statusLabel = isCapturing ? 'Ouvindo' : 'Iniciar';
-  let statusColor = isCapturing ? '#4ade80' : '#818cf8';
-  let statusIcon = isCapturing ? <Mic size={14} className="copilot-pulse" /> : <Play size={14} />;
+  // Determina rótulo, cor e ícone de estado de escuta/status (VAD - RF-002 & AUDIO-02)
+  let statusLabel = isCapturing ? (isAudioActive ? 'Ouvindo' : 'Ouvindo (Silêncio)') : 'Iniciar';
+  let statusColor = isCapturing ? (isAudioActive ? '#22c55e' : '#818cf8') : '#818cf8';
+  let statusBg = isCapturing ? (isAudioActive ? 'rgba(34, 197, 94, 0.25)' : 'rgba(99, 102, 241, 0.25)') : 'rgba(99, 102, 241, 0.25)';
+  let statusIcon = isCapturing ? (
+    <Mic size={14} className={isAudioActive ? 'copilot-pulse' : ''} />
+  ) : (
+    <Play size={14} />
+  );
 
   if (isSpeaking) {
     statusLabel = 'Lendo';
     statusColor = '#818cf8';
+    statusBg = 'rgba(99, 102, 241, 0.25)';
     statusIcon = <Volume2 size={14} className="copilot-pulse" />;
   } else if (isGenerating) {
     statusLabel = 'Gerando';
     statusColor = '#c084fc';
+    statusBg = 'rgba(192, 132, 252, 0.25)';
     statusIcon = <Sparkles size={14} className="copilot-pulse" />;
   } else if (isCapturing && !status.whisperConnected) {
     statusLabel = 'Reconectando';
     statusColor = '#f59e0b';
+    statusBg = 'rgba(245, 158, 11, 0.25)';
     statusIcon = <AlertTriangle size={14} />;
   }
 
@@ -178,7 +204,7 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
             padding: '6px 12px',
             borderRadius: '10px',
             border: 'none',
-            backgroundColor: isCapturing ? 'rgba(34, 197, 94, 0.25)' : 'rgba(99, 102, 241, 0.25)',
+            backgroundColor: statusBg,
             color: statusColor,
             fontSize: '12px',
             fontWeight: 600,
@@ -207,6 +233,29 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
           title="Status dos Serviços e Conexão"
         >
           <Activity size={14} />
+        </button>
+
+        {/* 2b. Botão do Modo de Reunião */}
+        <button
+          onClick={() => toggleMenu('mode')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '6px 10px',
+            borderRadius: '10px',
+            border: 'none',
+            backgroundColor: openMenu === 'mode' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255, 255, 255, 0.05)',
+            color: MODE_INFO[meetingMode]?.color || '#818cf8',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+          title={`Modo ativo: ${MODE_INFO[meetingMode]?.label}`}
+        >
+          {MODE_INFO[meetingMode]?.icon}
+          <span>{MODE_INFO[meetingMode]?.shortLabel}</span>
         </button>
 
         <div style={{ width: '1px', height: '18px', backgroundColor: 'rgba(255, 255, 255, 0.15)', margin: '0 2px' }} />
@@ -335,6 +384,66 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Popover Modo de Reunião */}
+      {openMenu === 'mode' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: opensUpward ? 'auto' : '48px',
+            bottom: opensUpward ? '48px' : 'auto',
+            left: '60px',
+            width: '210px',
+            backgroundColor: '#0f0f23',
+            border: '1px solid rgba(99, 102, 241, 0.4)',
+            borderRadius: '12px',
+            padding: '10px',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.85)',
+            fontSize: '12px',
+            color: '#ffffff',
+            zIndex: 1000000
+          }}
+        >
+          <div style={{ fontWeight: 600, color: '#94a3b8', fontSize: '11px', marginBottom: '8px', paddingLeft: '4px' }}>
+            Modo de Reunião Ativo
+          </div>
+          {(['technical_interview', 'system_design', 'code_review', 'general'] as MeetingMode[]).map(modeKey => {
+            const info = MODE_INFO[modeKey];
+            const isSelected = meetingMode === modeKey;
+            return (
+              <button
+                key={modeKey}
+                onClick={() => {
+                  onChangeMeetingMode?.(modeKey);
+                  setOpenMenu(null);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: isSelected ? 'rgba(99, 102, 241, 0.35)' : 'transparent',
+                  color: isSelected ? '#ffffff' : '#cbd5e1',
+                  fontSize: '12px',
+                  fontWeight: isSelected ? 600 : 400,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  marginBottom: '2px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: info.color }}>{info.icon}</span>
+                  <span>{info.label}</span>
+                </div>
+                {isSelected && <Check size={14} color="#a5b4fc" />}
+              </button>
+            );
+          })}
         </div>
       )}
 

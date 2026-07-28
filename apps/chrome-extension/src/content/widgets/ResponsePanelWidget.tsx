@@ -41,8 +41,54 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
   opacity
 }) => {
   const [copied, setCopied] = useState(false);
+  const [originalText, setOriginalText] = useState<string | null>(null);
+  const [overrideText, setOverrideText] = useState<string | null>(null);
+  const [isRewriting, setIsRewriting] = useState(false);
+  const [activeStyle, setActiveStyle] = useState<string | null>(null);
+
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const resizeRef = useRef<{ startX: number; startY: number; width: number; height: number } | null>(null);
+
+  // Escuta a resposta de reescrita local do offscreen / Chrome Built-in AI
+  React.useEffect(() => {
+    const handleMsg = (msg: any) => {
+      if (msg.type === 'CHROME_AI_REWRITE_RESPONSE') {
+        setIsRewriting(false);
+        if (msg.success && msg.rewrittenText) {
+          setOverrideText(msg.rewrittenText);
+        }
+      }
+    };
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.onMessage.addListener(handleMsg);
+      return () => chrome.runtime.onMessage.removeListener(handleMsg);
+    }
+  }, []);
+
+  const handleRewrite = (style: 'shorten' | 'formal' | 'technical' | 'expand') => {
+    const raw = suggestion?.rawText || streamingContent;
+    if (!raw) return;
+    if (!originalText) {
+      setOriginalText(raw);
+    }
+    setIsRewriting(true);
+    setActiveStyle(style);
+
+    const targetText = overrideText || raw;
+    chrome.runtime.sendMessage({
+      type: 'CHROME_AI_REWRITE',
+      text: targetText,
+      style
+    }).catch(() => {
+      setIsRewriting(false);
+    });
+  };
+
+  const handleUndoRewrite = () => {
+    setOverrideText(null);
+    setOriginalText(null);
+    setActiveStyle(null);
+  };
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -105,7 +151,7 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
   const currentSuggestion = isStreaming ? null : suggestion;
 
   const handleCopy = () => {
-    const textToCopy = currentSuggestion?.rawText || streamingContent;
+    const textToCopy = overrideText || currentSuggestion?.rawText || streamingContent;
     if (!textToCopy) return;
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
@@ -117,10 +163,10 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
 
   // Extração das partes da resposta (Frase de abertura vs Resposta estendida)
   let starterSentence = currentSuggestion?.structured?.opening || '';
-  let fullAnswerText = currentSuggestion?.structured?.answer || currentSuggestion?.rawText || '';
+  let fullAnswerText = overrideText || currentSuggestion?.structured?.answer || currentSuggestion?.rawText || '';
   let keywords = currentSuggestion?.structured?.keyPoints || [];
 
-  if (!starterSentence && fullAnswerText) {
+  if (!starterSentence && fullAnswerText && !overrideText) {
     const firstPeriod = fullAnswerText.indexOf('.');
     if (firstPeriod > 10 && firstPeriod < 120) {
       starterSentence = fullAnswerText.substring(0, firstPeriod + 1);
@@ -334,6 +380,114 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
                     ))}
                   </div>
                 )}
+
+                {/* Barra de Ações Rápidas de Reescrita (Gemini Nano Local) */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '6px',
+                    marginTop: '12px',
+                    paddingTop: '8px',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '10px', color: '#818cf8', fontWeight: 600, marginRight: '2px' }}>
+                      Reescrever:
+                    </span>
+                    <button
+                      onClick={() => handleRewrite('shorten')}
+                      disabled={isRewriting}
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                        backgroundColor: activeStyle === 'shorten' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255, 255, 255, 0.04)',
+                        color: '#c7d2fe',
+                        fontSize: '10px',
+                        cursor: 'pointer'
+                      }}
+                      title="Tornar resposta extremamente curta e direta"
+                    >
+                      ✂️ Encurtar
+                    </button>
+                    <button
+                      onClick={() => handleRewrite('formal')}
+                      disabled={isRewriting}
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                        backgroundColor: activeStyle === 'formal' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255, 255, 255, 0.04)',
+                        color: '#c7d2fe',
+                        fontSize: '10px',
+                        cursor: 'pointer'
+                      }}
+                      title="Reescrever em tom formal e corporativo"
+                    >
+                      💼 Formal
+                    </button>
+                    <button
+                      onClick={() => handleRewrite('technical')}
+                      disabled={isRewriting}
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                        backgroundColor: activeStyle === 'technical' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255, 255, 255, 0.04)',
+                        color: '#c7d2fe',
+                        fontSize: '10px',
+                        cursor: 'pointer'
+                      }}
+                      title="Enfatizar termos técnicos e arquitetura"
+                    >
+                      💻 Técnico
+                    </button>
+                    <button
+                      onClick={() => handleRewrite('expand')}
+                      disabled={isRewriting}
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                        backgroundColor: activeStyle === 'expand' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255, 255, 255, 0.04)',
+                        color: '#c7d2fe',
+                        fontSize: '10px',
+                        cursor: 'pointer'
+                      }}
+                      title="Detalhar a resposta com mais explicações"
+                    >
+                      📝 Expandir
+                    </button>
+                    {overrideText && (
+                      <button
+                        onClick={handleUndoRewrite}
+                        style={{
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(245, 158, 11, 0.4)',
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          color: '#fef3c7',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          marginLeft: '4px'
+                        }}
+                        title="Restaurar texto original"
+                      >
+                        ↩️ Desfazer
+                      </button>
+                    )}
+                    {isRewriting && (
+                      <span style={{ fontSize: '10px', color: '#c084fc', marginLeft: '4px' }} className="copilot-pulse">
+                        Reescrevendo... ✨
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 {/* Barra de Ações Inferior do Card */}
                 <div

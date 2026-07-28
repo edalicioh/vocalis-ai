@@ -45,6 +45,16 @@ const OptionsPage: React.FC = () => {
     return matchTitle || matchUrl || matchUtterance || matchSuggestion;
   });
 
+  const [chromeAiStatus, setChromeAiStatus] = useState<{ available: boolean; status: string }>({ available: false, status: 'unsupported' });
+
+  useEffect(() => {
+    chrome.storage.local.get('chromeAiStatus', (res) => {
+      if (res.chromeAiStatus) {
+        setChromeAiStatus(res.chromeAiStatus);
+      }
+    });
+  }, []);
+
   return (
     <div style={pageContainerStyle}>
       {/* Top Bar Header */}
@@ -53,7 +63,27 @@ const OptionsPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '32px' }}>🎙️</span>
             <div>
-              <h1 style={titleStyle}>Copiloto de Conversas & Entrevistas</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h1 style={titleStyle}>Copiloto de Conversas & Entrevistas</h1>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    backgroundColor: chromeAiStatus.available ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                    color: chromeAiStatus.available ? '#10b981' : '#f59e0b',
+                    border: `1px solid ${chromeAiStatus.available ? '#10b981' : '#f59e0b'}`
+                  }}
+                  title={
+                    chromeAiStatus.available
+                      ? 'Gemini Nano ativo para correção e sumarização no navegador'
+                      : 'Prompt API não detectada no navegador. Transcrição usando bypass transparente'
+                  }
+                >
+                  {chromeAiStatus.available ? '✨ Gemini Nano: Ativo (On-device)' : '⚡ Gemini Nano: Indisponível (Bypass Ativo)'}
+                </span>
+              </div>
               <p style={subtitleStyle}>Painel Geral de Configurações e Histórico de Reuniões</p>
             </div>
           </div>

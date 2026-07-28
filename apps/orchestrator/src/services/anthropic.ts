@@ -12,8 +12,32 @@ export class AnthropicProvider implements AnswerProvider {
     this.model = model;
   }
 
+  public getModel(): string {
+    return this.model;
+  }
+
   public isConfigured(): boolean {
     return Boolean(this.apiKey && this.apiKey.trim().length > 0);
+  }
+
+  public async listModels(apiKey?: string): Promise<string[]> {
+    const key = apiKey || this.apiKey;
+    if (!key) return ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01'
+        }
+      });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const json = await res.json();
+      const models: string[] = (json.data || []).map((m: any) => m.id || m.name).filter(Boolean);
+      return models.length > 0 ? models : ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
+    } catch {
+      return ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
+    }
   }
 
   public async *generate(input: AnswerInput): AsyncIterable<AnswerEvent> {

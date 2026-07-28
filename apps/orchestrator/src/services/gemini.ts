@@ -55,8 +55,35 @@ export class GeminiProvider implements AnswerProvider {
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
 
+  public setModel(model: string) {
+    if (model && model.trim()) {
+      this.modelName = model.trim();
+    }
+  }
+
+  public getModel(): string {
+    return this.modelName;
+  }
+
   public isConfigured(): boolean {
     return this.genAI !== null;
+  }
+
+  public async listModels(apiKey?: string): Promise<string[]> {
+    const key = apiKey || (this.genAI as any)?.apiKey || process.env.GEMINI_API_KEY;
+    if (!key) return ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const json = await res.json();
+      const models: string[] = (json.models || [])
+        .map((m: any) => m.name?.replace(/^models\//, ''))
+        .filter((name: string) => name && name.startsWith('gemini'));
+      return models.length > 0 ? models : ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    } catch {
+      return ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    }
   }
 
   public async *generate(input: AnswerInput): AsyncIterable<AnswerEvent> {

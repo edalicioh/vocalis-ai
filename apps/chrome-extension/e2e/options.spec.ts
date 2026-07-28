@@ -64,7 +64,7 @@ test.describe('Chrome Extension E2E — Página de Opções & Perfil', () => {
     await profileTab.click();
 
     // Preenche o campo de nome do candidato
-    const nameInput = page.locator('input[placeholder*="João Silva"]');
+    const nameInput = page.locator('input[placeholder*="Seu nome"]');
     if (await nameInput.isVisible()) {
       await nameInput.fill('Carlos QA');
     }
@@ -74,6 +74,35 @@ test.describe('Chrome Extension E2E — Página de Opções & Perfil', () => {
     await saveButton.click();
 
     // Verifica feedback visual de sucesso (✓ Salvo!)
+    const saveSuccess = page.locator('text=✓ Salvo!');
+    await expect(saveSuccess).toBeVisible({ timeout: 5000 });
+  });
+
+  test('deve permitir selecionar provedores de IA e customizar o nome do modelo', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+
+    // 1. Seleciona o provedor Gemini
+    const providerSelect = page.locator('select').first();
+    await providerSelect.selectOption('gemini');
+
+    // 2. Verifica que o seletor de modelos do Gemini está visível
+    const modelSelect = page.locator('select').nth(1);
+    await expect(modelSelect).toBeVisible();
+
+    // 3. Escolhe a opção de digitação livre
+    await modelSelect.selectOption('__custom__');
+
+    // 4. Preenche o modelo customizado
+    const customModelInput = page.locator('input[placeholder*="identificador exato do modelo"]');
+    await expect(customModelInput).toBeVisible();
+    await customModelInput.fill('gemini-2.0-flash-exp-custom');
+
+    // 5. Salva e verifica feedback
+    const saveButton = page.locator('button >> text=Salvar Configurações');
+    await saveButton.click();
+
     const saveSuccess = page.locator('text=✓ Salvo!');
     await expect(saveSuccess).toBeVisible({ timeout: 5000 });
   });

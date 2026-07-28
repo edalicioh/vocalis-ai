@@ -12,8 +12,25 @@ export class OllamaProvider implements AnswerProvider {
     this.model = model || 'llama3';
   }
 
+  public getModel(): string {
+    return this.model;
+  }
+
   public isConfigured(): boolean {
     return Boolean(this.endpoint && this.endpoint.trim().length > 0);
+  }
+
+  public async listModels(_apiKey?: string, endpoint?: string): Promise<string[]> {
+    const base = (endpoint || this.endpoint).replace(/\/$/, '');
+    try {
+      const res = await fetch(`${base}/api/tags`);
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const json = await res.json();
+      const models: string[] = (json.models || []).map((m: any) => m.name).filter(Boolean);
+      return models.length > 0 ? models : ['llama3', 'mistral', 'codestral'];
+    } catch {
+      return ['llama3', 'mistral', 'codestral'];
+    }
   }
 
   public async *generate(input: AnswerInput): AsyncIterable<AnswerEvent> {

@@ -5,7 +5,8 @@ import {
   ResponseMode,
   TtsMode,
   Settings,
-  AIProvider
+  AIProvider,
+  MeetingMode
 } from '@conversation-copilot/shared-types';
 
 type SettingsTab = 'api' | 'profile' | 'job' | 'modes';
@@ -20,10 +21,69 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   // API & Provider
   const [aiProvider, setAiProvider] = useState<AIProvider>('gemini');
   const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash');
   const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
   const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [anthropicModel, setAnthropicModel] = useState('claude-3-5-sonnet-20241022');
   const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
   const [ollamaModel, setOllamaModel] = useState('llama3');
+  const [customProxyEndpoint, setCustomProxyEndpoint] = useState('https://api.deepseek.com/v1/chat/completions');
+  const [customProxyApiKey, setCustomProxyApiKey] = useState('');
+  const [customProxyModel, setCustomProxyModel] = useState('deepseek-chat');
+
+  // Modelos carregados dinamicamente via API
+  const [dynamicModels, setDynamicModels] = useState<Record<AIProvider, ModelOption[]>>({
+    gemini: GEMINI_MODEL_OPTIONS,
+    openai: OPENAI_MODEL_OPTIONS,
+    anthropic: ANTHROPIC_MODEL_OPTIONS,
+    ollama: OLLAMA_MODEL_OPTIONS,
+    custom_proxy: CUSTOM_PROXY_MODEL_OPTIONS
+  });
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [fetchModelsMsg, setFetchModelsMsg] = useState<string | null>(null);
+
+  const handleFetchDynamicModels = async (provider: AIProvider) => {
+    setIsFetchingModels(true);
+    setFetchModelsMsg(null);
+    let apiKey = '';
+    let endpoint = '';
+
+    if (provider === 'gemini') apiKey = geminiApiKey;
+    else if (provider === 'openai') apiKey = openaiApiKey;
+    else if (provider === 'anthropic') apiKey = anthropicApiKey;
+    else if (provider === 'ollama') endpoint = ollamaEndpoint;
+    else if (provider === 'custom_proxy') {
+      apiKey = customProxyApiKey;
+      endpoint = customProxyEndpoint;
+    }
+
+    try {
+      const url = new URL('http://localhost:3001/api/models');
+      url.searchParams.append('provider', provider);
+      if (apiKey) url.searchParams.append('apiKey', apiKey);
+      if (endpoint) url.searchParams.append('endpoint', endpoint);
+
+      const res = await fetch(url.toString());
+      const json = await res.json();
+
+      if (json?.models?.length) {
+        const fetchedOptions: ModelOption[] = json.models.map((m: string) => ({
+          value: m,
+          label: `✨ ${m}`
+        }));
+        setDynamicModels(prev => ({ ...prev, [provider]: fetchedOptions }));
+        setFetchModelsMsg(`✓ ${json.models.length} modelos liberados na sua API!`);
+        setTimeout(() => setFetchModelsMsg(null), 3500);
+      } else {
+        setFetchModelsMsg('⚠️ Nenhum modelo retornado pela API.');
+      }
+    } catch (err: any) {
+      setFetchModelsMsg(`⚠️ Erro ao consultar API: ${err?.message || 'Orquestrador offline'}`);
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
 
   // Perfil profissional (RF-015)
   const [name, setName] = useState('');
@@ -45,6 +105,14 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   const [jobNotes, setJobNotes] = useState('');
 
   // Modos
+  const [meetingMode, setMeetingMode] = useState<MeetingMode>('technical_interview');
+  const [modeNotes, setModeNotes] = useState<Record<MeetingMode, string>>({
+    technical_interview: '',
+    system_design: '',
+    code_review: '',
+    general: ''
+  });
+  const [rmsThreshold, setRmsThreshold] = useState<number>(0.01);
   const [responseMode, setResponseMode] = useState<ResponseMode>('short');
   const [ttsMode, setTtsMode] = useState<TtsMode>('manual');
   const [ttsSpeed, setTtsSpeed] = useState(1.25);
@@ -56,12 +124,21 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   // Carrega dados salvos
   useEffect(() => {
     chrome.storage.local.get(null, (res) => {
+      if (res.meetingMode) setMeetingMode(res.meetingMode);
+      if (res.modeNotes) setModeNotes(prev => ({ ...prev, ...res.modeNotes }));
+      if (typeof res.rmsThreshold === 'number') setRmsThreshold(res.rmsThreshold);
       if (res.aiProvider) setAiProvider(res.aiProvider);
       if (res.geminiApiKey) setGeminiApiKey(res.geminiApiKey);
+      if (res.geminiModel) setGeminiModel(res.geminiModel);
       if (res.openaiApiKey) setOpenaiApiKey(res.openaiApiKey);
+      if (res.openaiModel) setOpenaiModel(res.openaiModel);
       if (res.anthropicApiKey) setAnthropicApiKey(res.anthropicApiKey);
+      if (res.anthropicModel) setAnthropicModel(res.anthropicModel);
       if (res.ollamaEndpoint) setOllamaEndpoint(res.ollamaEndpoint);
       if (res.ollamaModel) setOllamaModel(res.ollamaModel);
+      if (res.customProxyEndpoint) setCustomProxyEndpoint(res.customProxyEndpoint);
+      if (res.customProxyApiKey) setCustomProxyApiKey(res.customProxyApiKey);
+      if (res.customProxyModel) setCustomProxyModel(res.customProxyModel);
       if (res.name) setName(res.name);
       if (res.role) setRole(res.role);
       if (res.seniority) setSeniority(res.seniority);
@@ -112,11 +189,19 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
 
     return {
       aiProvider,
+      meetingMode,
+      modeNotes,
       geminiApiKey,
+      geminiModel,
       openaiApiKey,
+      openaiModel,
       anthropicApiKey,
+      anthropicModel,
       ollamaEndpoint,
       ollamaModel,
+      customProxyEndpoint,
+      customProxyApiKey,
+      customProxyModel,
       responseMode,
       ttsMode,
       ttsSpeed,
@@ -131,8 +216,14 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   const handleSave = () => {
     const payload = buildPayload();
 
+    try {
+      localStorage.setItem('copilotMeetingMode', meetingMode);
+      localStorage.setItem('copilotModeNotes', JSON.stringify(modeNotes));
+    } catch (e) {}
+
     chrome.storage.local.set({
-      aiProvider, geminiApiKey, openaiApiKey, anthropicApiKey, ollamaEndpoint, ollamaModel,
+      aiProvider, meetingMode, modeNotes, rmsThreshold, geminiApiKey, geminiModel, openaiApiKey, openaiModel, anthropicApiKey, anthropicModel,
+      ollamaEndpoint, ollamaModel, customProxyEndpoint, customProxyApiKey, customProxyModel,
       name, role, seniority, skills, experiences, projects,
       strengths, weaknesses, jobTitle, jobCompany, jobDescription,
       jobRequirements, jobNiceToHave, jobTechnologies, jobNotes,
@@ -141,6 +232,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     });
+
+    chrome.runtime.sendMessage({ type: 'SET_RMS_THRESHOLD', rmsThreshold }).catch(() => {});
 
     const ws = new WebSocket('ws://localhost:3001/ws');
     ws.onopen = () => {
@@ -185,26 +278,85 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
                 <option value="openai">🤖 OpenAI (GPT-4o / GPT-4o-mini)</option>
                 <option value="anthropic">🧠 Anthropic (Claude 3.5 Sonnet)</option>
                 <option value="ollama">🏠 Ollama Local (100% Offline)</option>
+                <option value="custom_proxy">🌐 Proxy Agnóstico / API Customizada (DeepSeek, Groq, OpenRouter, etc.)</option>
               </select>
             </div>
 
             {aiProvider === 'gemini' && (
-              <Field label="Chave de API do Google Gemini" type="password" value={geminiApiKey} onChange={setGeminiApiKey} placeholder="AIzaSy..." />
+              <>
+                <Field label="Chave de API do Google Gemini" type="password" value={geminiApiKey} onChange={setGeminiApiKey} placeholder="AIzaSy..." />
+                <ModelSelectorField
+                  label="Modelo do Google Gemini"
+                  options={dynamicModels.gemini}
+                  value={geminiModel}
+                  onChange={setGeminiModel}
+                  onFetchModels={() => handleFetchDynamicModels('gemini')}
+                  isFetching={isFetchingModels}
+                />
+              </>
             )}
 
             {aiProvider === 'openai' && (
-              <Field label="Chave de API da OpenAI (sk-...)" type="password" value={openaiApiKey} onChange={setOpenaiApiKey} placeholder="sk-..." />
+              <>
+                <Field label="Chave de API da OpenAI (sk-...)" type="password" value={openaiApiKey} onChange={setOpenaiApiKey} placeholder="sk-..." />
+                <ModelSelectorField
+                  label="Modelo da OpenAI"
+                  options={dynamicModels.openai}
+                  value={openaiModel}
+                  onChange={setOpenaiModel}
+                  onFetchModels={() => handleFetchDynamicModels('openai')}
+                  isFetching={isFetchingModels}
+                />
+              </>
             )}
 
             {aiProvider === 'anthropic' && (
-              <Field label="Chave de API da Anthropic (sk-ant-...)" type="password" value={anthropicApiKey} onChange={setAnthropicApiKey} placeholder="sk-ant-..." />
+              <>
+                <Field label="Chave de API da Anthropic (sk-ant-...)" type="password" value={anthropicApiKey} onChange={setAnthropicApiKey} placeholder="sk-ant-..." />
+                <ModelSelectorField
+                  label="Modelo da Anthropic"
+                  options={dynamicModels.anthropic}
+                  value={anthropicModel}
+                  onChange={setAnthropicModel}
+                  onFetchModels={() => handleFetchDynamicModels('anthropic')}
+                  isFetching={isFetchingModels}
+                />
+              </>
             )}
 
             {aiProvider === 'ollama' && (
               <>
                 <Field label="Endpoint do Ollama Local" value={ollamaEndpoint} onChange={setOllamaEndpoint} placeholder="http://localhost:11434" />
-                <Field label="Nome do Modelo Ollama" value={ollamaModel} onChange={setOllamaModel} placeholder="llama3 ou mistral" />
+                <ModelSelectorField
+                  label="Modelo do Ollama Local"
+                  options={dynamicModels.ollama}
+                  value={ollamaModel}
+                  onChange={setOllamaModel}
+                  onFetchModels={() => handleFetchDynamicModels('ollama')}
+                  isFetching={isFetchingModels}
+                />
               </>
+            )}
+
+            {aiProvider === 'custom_proxy' && (
+              <>
+                <Field label="Endpoint do Proxy LLM (OpenAI Compatible)" value={customProxyEndpoint} onChange={setCustomProxyEndpoint} placeholder="https://api.deepseek.com/v1/chat/completions" />
+                <Field label="Chave de API / Bearer Token (opcional)" type="password" value={customProxyApiKey} onChange={setCustomProxyApiKey} placeholder="sk-..." />
+                <ModelSelectorField
+                  label="Modelo do Proxy Customizado"
+                  options={dynamicModels.custom_proxy}
+                  value={customProxyModel}
+                  onChange={setCustomProxyModel}
+                  onFetchModels={() => handleFetchDynamicModels('custom_proxy')}
+                  isFetching={isFetchingModels}
+                />
+              </>
+            )}
+
+            {fetchModelsMsg && (
+              <div style={{ fontSize: '11px', color: fetchModelsMsg.startsWith('✓') ? '#4ade80' : '#facc15', textAlign: 'center', marginTop: '4px' }}>
+                {fetchModelsMsg}
+              </div>
             )}
 
             <div style={hintStyle}>
@@ -249,11 +401,45 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
           </>
         )}
 
-        {/* Tab: Modos (RF-017, RF-013) */}
+        {/* Tab: Modos (RF-017, RF-013, RF-020) */}
         {activeTab === 'modes' && (
           <>
             <div style={fieldGroupStyle}>
-              <label style={labelStyle}>Modo de Resposta</label>
+              <label style={labelStyle}>Modo de Reunião Ativo</label>
+              <select value={meetingMode} onChange={e => setMeetingMode(e.target.value as MeetingMode)} style={inputStyle}>
+                <option value="technical_interview">🎯 Entrevista Técnica (Respostas curtas de 30s)</option>
+                <option value="system_design">🏗️ System Design (Trade-offs e Arquitetura)</option>
+                <option value="code_review">💻 Code Review (Complexidade e Refatoração)</option>
+                <option value="general">📝 Reunião Geral (Alinhamento e Action Items)</option>
+              </select>
+            </div>
+
+            <div style={fieldGroupStyle}>
+              <label style={labelStyle}>Notas & Diretrizes do Modo Ativo (Markdown)</label>
+              <textarea
+                value={modeNotes[meetingMode] || ''}
+                onChange={e => {
+                  const text = e.target.value;
+                  setModeNotes(prev => ({ ...prev, [meetingMode]: text }));
+                }}
+                placeholder="Cole aqui diretrizes da vaga, requisitos de arquitetura ou lembretes específicos para este modo..."
+                style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }}
+                rows={3}
+              />
+            </div>
+
+            <div style={fieldGroupStyle}>
+              <label style={labelStyle}>Sensibilidade do Filtro de Ruído/Silêncio (RMS Gate)</label>
+              <select value={rmsThreshold} onChange={e => setRmsThreshold(parseFloat(e.target.value))} style={inputStyle}>
+                <option value={0.02}>⚡ Baixa (0.02 - Filtra ruído alto de fundo)</option>
+                <option value={0.01}>🎯 Média (0.01 - Padrão / Recomendado)</option>
+                <option value={0.005}>🎙️ Alta (0.005 - Captura sussurros e fala suave)</option>
+                <option value={0.0}>🔓 Desativado (0.0 - Envia 100% dos pacotes)</option>
+              </select>
+            </div>
+
+            <div style={fieldGroupStyle}>
+              <label style={labelStyle}>Modo de Resposta da IA</label>
               <select value={responseMode} onChange={e => setResponseMode(e.target.value as ResponseMode)} style={inputStyle}>
                 <option value="keywords">🔑 Palavras-chave</option>
                 <option value="short">📝 Curto (30-60 palavras)</option>
@@ -339,6 +525,122 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
 // ============================================================
 // Componente auxiliar de campo
 // ============================================================
+
+interface ModelOption {
+  value: string;
+  label: string;
+}
+
+const GEMINI_MODEL_OPTIONS: ModelOption[] = [
+  { value: 'gemini-2.5-flash', label: '⚡ Gemini 2.5 Flash (Recomendado / Ultra-Rápido)' },
+  { value: 'gemini-1.5-flash', label: '⚡ Gemini 1.5 Flash (Rápido)' },
+  { value: 'gemini-1.5-pro', label: '🧠 Gemini 1.5 Pro (Maior Raciocínio)' },
+  { value: 'gemini-2.0-flash-exp', label: '🧪 Gemini 2.0 Flash (Experimental)' },
+];
+
+const OPENAI_MODEL_OPTIONS: ModelOption[] = [
+  { value: 'gpt-4o-mini', label: '⚡ GPT-4o Mini (Recomendado / Rápido & Econômico)' },
+  { value: 'gpt-4o', label: '🧠 GPT-4o (Completo / Multimodal)' },
+  { value: 'gpt-4-turbo', label: '🚀 GPT-4 Turbo' },
+  { value: 'o1-mini', label: '🧩 o1-mini (Raciocínio Rápido)' },
+  { value: 'o1-preview', label: '🧩 o1-preview (Raciocínio Avançado)' },
+];
+
+const ANTHROPIC_MODEL_OPTIONS: ModelOption[] = [
+  { value: 'claude-3-5-sonnet-20241022', label: '🧠 Claude 3.5 Sonnet v2 (Recomendado)' },
+  { value: 'claude-3-5-haiku-20241022', label: '⚡ Claude 3.5 Haiku (Ultra-Rápido)' },
+  { value: 'claude-3-opus-20240229', label: '🏛️ Claude 3 Opus (Raciocínio Complexo)' },
+];
+
+const OLLAMA_MODEL_OPTIONS: ModelOption[] = [
+  { value: 'llama3', label: '🦙 Llama 3 (Padrão Local)' },
+  { value: 'llama3.1', label: '🦙 Llama 3.1 (8B / 70B)' },
+  { value: 'mistral', label: '🌪️ Mistral 7B' },
+  { value: 'codestral', label: '💻 Codestral (Foco em Código)' },
+  { value: 'qwen2.5-coder', label: '👨‍💻 Qwen 2.5 Coder' },
+  { value: 'phi3', label: '🔬 Phi-3 Mini' },
+];
+
+const CUSTOM_PROXY_MODEL_OPTIONS: ModelOption[] = [
+  { value: 'deepseek-chat', label: '🐳 DeepSeek V3 / R1 (DeepSeek API)' },
+  { value: 'llama-3.3-70b-versatile', label: '⚡ Llama 3.3 70B (Groq LPU)' },
+  { value: 'anthropic/claude-3.5-sonnet', label: '🌐 Claude 3.5 Sonnet (OpenRouter)' },
+  { value: 'mistral-small-latest', label: '🍃 Mistral Small (Mistral Cloud)' },
+];
+
+const ModelSelectorField: React.FC<{
+  label: string;
+  options: ModelOption[];
+  value: string;
+  onChange: (v: string) => void;
+  onFetchModels?: () => void;
+  isFetching?: boolean;
+}> = ({ label, options, value, onChange, onFetchModels, isFetching }) => {
+  const isCustomOption = Boolean(value) && !options.some(opt => opt.value === value);
+  const [isCustomMode, setIsCustomMode] = useState(isCustomOption);
+
+  useEffect(() => {
+    if (value && !options.some(opt => opt.value === value)) {
+      setIsCustomMode(true);
+    }
+  }, [value, options]);
+
+  return (
+    <div style={fieldGroupStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <label style={labelStyle}>{label}</label>
+        {onFetchModels && (
+          <button
+            type="button"
+            onClick={onFetchModels}
+            disabled={isFetching}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#60a5fa',
+              fontSize: '10px',
+              fontWeight: 600,
+              cursor: isFetching ? 'not-allowed' : 'pointer',
+              padding: '0 2px'
+            }}
+          >
+            {isFetching ? '⏳ Buscando...' : '🔄 Carregar da API'}
+          </button>
+        )}
+      </div>
+      <select
+        value={isCustomMode ? '__custom__' : value}
+        onChange={e => {
+          const val = e.target.value;
+          if (val === '__custom__') {
+            setIsCustomMode(true);
+          } else {
+            setIsCustomMode(false);
+            onChange(val);
+          }
+        }}
+        style={inputStyle}
+      >
+        {options.map(opt => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+        <option value="__custom__">✏️ Outro modelo (digitar livremente...)</option>
+      </select>
+
+      {isCustomMode && (
+        <input
+          type="text"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="Digite o identificador exato do modelo..."
+          style={{ ...inputStyle, marginTop: '4px' }}
+        />
+      )}
+    </div>
+  );
+};
 
 const Field: React.FC<{
   label: string;

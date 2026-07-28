@@ -1,3 +1,6 @@
+import { ChromeBuiltInAIProcessor } from './chrome-ai-processor';
+import { ChromeRewriterProcessor } from './chrome-rewriter-processor';
+
 let ws: WebSocket | null = null;
 let audioContext: AudioContext | null = null;
 let tabStream: MediaStream | null = null;
@@ -8,6 +11,8 @@ let audioWorkletNode: AudioWorkletNode | null = null;
 let sentAudioChunks = 0;
 
 let activeSessionId: string | null = null;
+let aiProcessor: ChromeBuiltInAIProcessor | null = null;
+const rewriterProcessor = new ChromeRewriterProcessor();
 
 function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -17,11 +22,20 @@ function connectWebSocket() {
   ws = new WebSocket('ws://localhost:3001/ws');
   ws.binaryType = 'arraybuffer';
 
-  ws.onopen = () => {
+  ws.onopen = async () => {
     console.log('[Offscreen] Conectado ao Orquestrador WebSocket.');
     if (activeSessionId) {
       ws?.send(JSON.stringify({ type: 'session.register', sessionId: activeSessionId, payload: {} }));
     }
+
+    if (!aiProcessor) {
+      aiProcessor = new ChromeBuiltInAIProcessor();
+    }
+    const status = await aiProcessor.initCapabilities();
+    chrome.runtime.sendMessage({
+      type: 'CHROME_AI_STATUS_UPDATE',
+      status: status
+    }).catch(() => {});
   };
 
   ws.onclose = () => {
@@ -44,13 +58,27 @@ chrome.runtime.onMessage.addListener((message) => {
         ws.send(JSON.stringify({ type: 'session.register', sessionId: activeSessionId, payload: {} }));
       }
     }
-    startCapture(message.streamId);
+    startCapture(message.streamId, message.rmsThreshold);
   } else if (message.type === 'STOP_AUDIO_CAPTURE') {
     stopCapture();
+  } else if (message.type === 'SET_RMS_THRESHOLD' && typeof message.rmsThreshold === 'number') {
+    if (audioWorkletNode) {
+      audioWorkletNode.port.postMessage({ rmsThreshold: message.rmsThreshold });
+    }
+  } else if (message.type === 'CHROME_AI_REWRITE' && message.text && message.style) {
+    rewriterProcessor.rewriteText(message.text, message.style).then((res) => {
+      chrome.runtime.sendMessage({
+        type: 'CHROME_AI_REWRITE_RESPONSE',
+        rewrittenText: res.rewrittenText,
+        style: message.style,
+        suggestionId: message.suggestionId,
+        success: res.success
+      }).catch(() => {});
+    });
   }
 });
 
-async function startCapture(streamId: string) {
+async function startCapture(streamId: string, initialRmsThreshold?: number) {
   try {
     stopCapture(false);
 
@@ -93,15 +121,32 @@ async function startCapture(streamId: string) {
       outputChannelCount: [1],
       channelCount: 1,
       channelCountMode: 'explicit',
-      processorOptions: { bufferSize: 4096 }
+      processorOptions: {
+        bufferSize: 4096,
+        rmsThreshold: typeof initialRmsThreshold === 'number' ? initialRmsThreshold : 0.01
+      }
     });
 
-    audioWorkletNode.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+    audioWorkletNode.port.onmessage = (event: MessageEvent<any>) => {
+      if (!event.data) return;
+
+      if (event.data.type === 'VAD_STATE') {
+        chrome.runtime.sendMessage({
+          type: 'AUDIO_VAD_STATE',
+          isAudioActive: event.data.isAudioActive,
+          rms: event.data.rms
+        }).catch(() => {});
+        return;
+      }
+
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      ws.send(event.data);
-      sentAudioChunks++;
-      if (sentAudioChunks === 1) {
-        console.log(`[Offscreen] Primeiro bloco PCM enviado (${event.data.byteLength} bytes).`);
+
+      if (event.data instanceof ArrayBuffer) {
+        ws.send(event.data);
+        sentAudioChunks++;
+        if (sentAudioChunks === 1) {
+          console.log(`[Offscreen] Primeiro bloco PCM enviado (${event.data.byteLength} bytes).`);
+        }
       }
     };
 
