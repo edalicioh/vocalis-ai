@@ -15,3 +15,21 @@
 ## Future Milestones
 
 *(Execute `/gsd-new-milestone` para definir o próximo marco de desenvolvimento)*
+
+---
+
+## Backlog
+
+### Phase 999.1: Integração com Chrome Built-in AI / Gemini Nano (BACKLOG)
+
+**Goal:** Suportar inferência local no navegador via Chrome Built-in AI APIs (Prompt API, Writer API / Rewriter API) integradas ao Gemini Nano no Chrome, em conformidade com as diretrizes e políticas de uso do Google Generative AI.
+**Context & References:**
+- [Chrome Built-in AI Documentation](https://developer.chrome.com/docs/ai/built-in?hl=pt-br)
+- [Google Generative AI Prohibited Use Policy](https://policies.google.com/terms/generative-ai/use-policy)
+- Writer API / Prompt API em Gemini Nano para redação e respostas sem depender do servidor local/remoto.
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promover com /gsd-review-backlog quando pronto)
+
