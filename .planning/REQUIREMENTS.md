@@ -7,9 +7,9 @@
 ## v1.3 Requirements
 
 ### Chrome Built-in AI (Pré-processador Inteligente Local)
-- [ ] **CHROME-01**: A extensão utiliza a Prompt API (`window.ai.languageModel`) para realizar a correção ortográfica local de termos técnicos e jargões na transcrição do Whisper.
-- [ ] **CHROME-02**: O módulo local realiza sumarização incremental contínua do histórico da conversa para compressão de tokens e classificação de categoria antes do envio ao Orquestrador.
-- [ ] **CHROME-03**: A extensão lida graciosamente com a indisponibilidade da API `window.ai` desativando o pré-processamento on-device sem interromper o fluxo com o Orquestrador/Gemini Flash.
+- [x] **CHROME-01**: A extensão utiliza a Prompt API (`window.ai.languageModel`) para realizar a correção ortográfica local de termos técnicos e jargões na transcrição do Whisper.
+- [x] **CHROME-02**: O módulo local realiza sumarização incremental contínua do histórico da conversa para compressão de tokens e classificação de categoria antes do envio ao Orquestrador.
+- [x] **CHROME-03**: A extensão lida graciosamente com a indisponibilidade da API `window.ai` desativando o pré-processamento on-device sem interromper o fluxo com o Orquestrador/Gemini Flash.
 
 
 ### Modos de Reunião Adaptativos & Contexto
@@ -39,9 +39,9 @@
 
 | Requirement | Phase | Status |
 |:---|:---|:---|
-| CHROME-01 | Phase 7 | Pending |
-| CHROME-02 | Phase 7 | Pending |
-| CHROME-03 | Phase 7 | Pending |
+| CHROME-01 | Phase 7 | Completed |
+| CHROME-02 | Phase 7 | Completed |
+| CHROME-03 | Phase 7 | Completed |
 | MODE-01 | Phase 8 | Pending |
 | MODE-02 | Phase 8 | Pending |
 | MODE-03 | Phase 8 | Pending |

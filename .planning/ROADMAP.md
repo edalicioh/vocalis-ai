@@ -17,10 +17,12 @@
 ### Phase 7: Chrome Built-in AI como Pré-processador Inteligente Local
 **Goal:** Implementar o módulo `ChromeBuiltInAIProcessor` (Prompt API) para correção de jargões técnicos da transcrição Whisper, sumarização incremental da conversa e classificação de categoria on-device sem custo ou latência de nuvem.
 **Requirements:** `CHROME-01`, `CHROME-02`, `CHROME-03`
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (gerado via `/gsd-plan-phase 7`)
+- [x] 07-01-PLAN.md — Tipos & Protocolo do Pré-processador Local
+- [x] 07-02-PLAN.md — Módulo ChromeBuiltInAIProcessor no Offscreen Document
+- [x] 07-03-PLAN.md — UI de Status de Fallback, Background Integration & Testes Unitários
 
 ---
 
