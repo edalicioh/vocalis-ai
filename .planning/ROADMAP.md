@@ -27,12 +27,14 @@ Plans:
 ---
 
 ### Phase 8: Modos de Reunião Adaptativos & Contexto Customizado
-**Goal:** Introduzir o seletor de Modos de Reunião (Entrevista Técnica, System Design, Code Review, Reunião Geral) no HUD/Popup e adaptar dinamicamente as diretrizes de prompt e contexto do Orquestrador.
+**Goal:** Implementar os 4 modos de reunião (Entrevista Técnica, System Design, Code Review, Geral), seletores visuais na UI (HUD/Popup), notas de apoio em Markdown por modo e Prompts de Sistema especializados no Orquestrador.
 **Requirements:** `MODE-01`, `MODE-02`, `MODE-03`
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (gerado via `/gsd-plan-phase 8`)
+- [x] 08-01-PLAN.md — Tipos & Protocolo WebSocket para Modos de Reunião
+- [x] 08-02-PLAN.md — Prompts de Sistema Adaptativos no Orquestrador
+- [x] 08-03-PLAN.md — UI do Seletor de Modo & Notas de Apoio
 
 ---
 
