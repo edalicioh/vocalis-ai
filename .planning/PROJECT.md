@@ -22,14 +22,15 @@ Apresentar sugestões contextuais curtas, precisas e em tempo quase real (com le
 
 ---
 
-## Current Milestone: v1.3 Chrome Built-in AI, Modos de Reunião & Otimizações de Áudio
+## Current Milestone: v1.3 Chrome Built-in AI como Pré-processador, Modos de Reunião & Otimizações de Áudio
 
-**Goal:** Integrar a IA nativa do Chrome (Gemini Nano) para inferência local zero-latency sem API keys, expandir a inteligência de contexto com modos adaptativos de reunião e aprimorar o VAD/latência do áudio Whisper.
+**Goal:** Utilizar a IA nativa do Chrome (Gemini Nano) como pré-processador inteligente local (correção de transcrição, sumarização incremental e compressão de tokens), mantendo o raciocínio factual no Gemini Flash / Cloud LLMs, além de adicionar modos adaptativos de reunião e otimizações de VAD/latência no Whisper.
 
 **Target features:**
-- Provedor nativo Chrome Built-in AI (Prompt API e Writer API) em `AnswerProviderManager`.
+- Pré-processador Local `ChromeBuiltInAIProcessor` (Prompt API / Writer API) para limpeza de transcrição, sumarização incremental e classificação de contexto.
 - Modos de Reunião Adaptativos (Entrevista Técnica, System Design, Code Review, Alinhamento) com injeção de contexto customizado.
 - Otimização do pipeline de áudio & Whisper com Voice Activity Detection (VAD) e controle dinâmico de latência.
+
 
 ---
 

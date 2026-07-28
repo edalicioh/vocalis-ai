@@ -1,23 +1,21 @@
 # Research Summary — Milestone v1.3
 
-> Síntese das pesquisas para o Marco v1.3: Chrome Built-in AI, Modos de Reunião & Otimizações de Áudio.
+> Síntese das pesquisas para o Marco v1.3: Chrome Built-in AI como Pré-processador Inteligente, Modos de Reunião & Otimizações de Áudio.
 
 ---
 
-## 1. Stack Adicionada
-- **Chrome Built-in AI APIs**: `window.ai.languageModel` (Prompt API), `window.ai.writer` (Writer API) com suporte a streaming via `promptStreaming()`.
-- **Silero VAD (Voice Activity Detection)**: Integração nativa no `faster-whisper` (`vad_filter=True`) + RMS Energy Gate no Worklet de áudio client-side.
-- **Tipos & Enums**: `MeetingMode` em `@conversation-copilot/shared-types`.
+## 1. Stack & Arquitetura Refinada
+- **Chrome Built-in AI APIs (`window.ai.languageModel` / `window.ai.writer`)**: Atua como **Pré-processador Local Inteligente** on-device (NLP local) para:
+  1. Correção ortográfica de jargões técnicos na transcrição Whisper (ex: "Larabel" -> "Laravel").
+  2. Sumarização incremental contínua para compressão de tokens da conversa.
+  3. Classificação de intenção/categoria da pergunta e extração de palavras-chave.
+- **Modelos de Inferência Factual (Gemini Flash / OpenAI / Claude / Ollama)**: Atuam como o **Cérebro de Raciocínio**, recebendo apenas o contexto sintetizado/compactado para respostas técnicas de altíssima precisão.
+- **Silero VAD & RMS Energy Gate**: Filtragem dupla de áudio e silêncio.
 
-## 2. Destaques de Funcionalidades
-- Provedor nativo `ChromeBuiltInAIProvider` no `AnswerProviderManager` com fallback para Gemini Cloud/Ollama.
-- Seletor de Modo de Reunião (Entrevista Técnica, System Design, Code Review, Alinhamento) na interface HUD.
-- Pipeline de transcrição resiliente com redução de consumo de CPU/largura de banda via VAD duplo.
-
-## 3. Cuidados & Pontos Críticos (Watch Out For)
-- Tratar graciosamente a ausência do `window.ai` em navegadores sem a flag ativa.
-- Manter o prompt de sistema do Gemini Nano enxuto (janela de contexto restrita).
-- Adicionar padding de 200ms no buffer PCM para evitar que o VAD corte o início das frases.
+## 2. Ganhos da Arquitetura
+- **Redução massiva de tokens e custos**: O envio contínuo da transcrição bruta de 20min de reunião é substituído pelo envio de um resumo compacto pré-processado localmente.
+- **Precisão Factual Preservada**: Respostas técnicas não são delegadas ao Gemini Nano (evitando limitações de NLP), mantendo a autoridade no Gemini Flash / GPT-4o / Claude.
 
 ---
 *Commit efetuado com sucesso.*
+

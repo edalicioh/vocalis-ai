@@ -6,10 +6,11 @@
 
 ## v1.3 Requirements
 
-### Chrome Built-in AI (Gemini Nano)
-- [ ] **CHROME-01**: O usuário pode selecionar o provedor `Chrome Built-in AI (Gemini Nano)` no seletor de IA se o navegador suportar a Prompt API (`window.ai`).
-- [ ] **CHROME-02**: A extensão realiza streaming em tempo real das sugestões usando a Prompt API (`session.promptStreaming`) sem requisições de rede externas.
-- [ ] **CHROME-03**: A aplicação realiza fallback automático para outro provedor configurado caso a API `window.ai` não esteja disponível ou ocorra um erro de inferência on-device.
+### Chrome Built-in AI (Pré-processador Inteligente Local)
+- [ ] **CHROME-01**: A extensão utiliza a Prompt API (`window.ai.languageModel`) para realizar a correção ortográfica local de termos técnicos e jargões na transcrição do Whisper.
+- [ ] **CHROME-02**: O módulo local realiza sumarização incremental contínua do histórico da conversa para compressão de tokens e classificação de categoria antes do envio ao Orquestrador.
+- [ ] **CHROME-03**: A extensão lida graciosamente com a indisponibilidade da API `window.ai` desativando o pré-processamento on-device sem interromper o fluxo com o Orquestrador/Gemini Flash.
+
 
 ### Modos de Reunião Adaptativos & Contexto
 - [ ] **MODE-01**: O usuário pode selecionar o modo de reunião ativo no painel/popup entre: Entrevista Técnica, System Design, Code Review e Reunião Geral.
