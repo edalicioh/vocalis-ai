@@ -11,6 +11,7 @@ import { WhisperClient } from './services/whisper-client.js';
 import { MeetingSummaryService } from './services/meeting-summary.js';
 import { AnswerProviderManager } from './services/provider-manager.js';
 import { AnswerProvider, AnswerEvent } from './services/answer-provider.js';
+import { ToneAnalyzer } from './services/tone-analyzer.js';
 import {
   WSMessage,
   Settings,
@@ -251,6 +252,33 @@ async function triggerBackgroundSummary(targetSessionId?: string) {
 }
 
 // ============================================================
+// Análise de Tom via LLM (background, não-bloqueante)
+// ============================================================
+
+async function triggerBackgroundToneAnalysis(targetSessionId?: string) {
+  (async () => {
+    try {
+      const cm = getContextManager(targetSessionId);
+      const recentUtterances = cm.getRecentUtterances();
+      if (recentUtterances.length < 3) return;
+
+      const llmResult = await ToneAnalyzer.analyzeWithLLM(cm, answerProvider);
+      if (llmResult) {
+        cm.updateTone(llmResult.tone, llmResult.confidence, llmResult.summary);
+        broadcastToSession(targetSessionId, {
+          type: 'conversation.tone.updated',
+          sessionId: targetSessionId,
+          payload: cm.getTonePayload()
+        });
+        server.log.info({ tone: llmResult.tone, confidence: llmResult.confidence }, 'Tom da conversa atualizado via LLM.');
+      }
+    } catch (err: any) {
+      server.log.warn({ err }, 'Falha ao analisar tom via LLM (não-crítico).');
+    }
+  })();
+}
+
+// ============================================================
 // Servidor
 // ============================================================
 
@@ -278,7 +306,12 @@ async function startServer() {
     }
 
     if (utterance.isFinal) {
-      const detection = QuestionDetector.detect(utterance.text, 0, true);
+      // Detecção contextual: usa pausa real + histórico da conversa
+      const pauseMs = cm.getPauseSinceLastUtterance();
+      const detection = QuestionDetector.detectWithContext(utterance.text, pauseMs, true, {
+        recentUtterances: cm.getRecentUtterances(),
+        accumulatedPartials: cm.getAccumulatedPartials()
+      });
 
       if (detection.isQuestion) {
         broadcastToSession(targetSessionId, {
@@ -296,6 +329,20 @@ async function startServer() {
         if (answerProvider.isConfigured()) {
           triggerLLMSuggestion(utterance.text, targetSessionId);
         }
+      }
+
+      // Análise de tom: heurística rápida a cada fala final
+      const toneResult = ToneAnalyzer.analyzeHeuristic(cm.getRecentUtterances());
+      cm.updateTone(toneResult.tone, toneResult.confidence, toneResult.summary);
+      broadcastToSession(targetSessionId, {
+        type: 'conversation.tone.updated',
+        sessionId: targetSessionId,
+        payload: cm.getTonePayload()
+      });
+
+      // Análise de tom via LLM em background (a cada 8 falas)
+      if (cm.shouldAnalyzeTone()) {
+        triggerBackgroundToneAnalysis(targetSessionId);
       }
     }
   });
@@ -475,16 +522,23 @@ async function startServer() {
   });
 
   // RNF-005: Bind somente em 127.0.0.1
-  const PORT = Number(process.env.PORT) || 3001;
-  const HOST = process.env.HOST || '127.0.0.1';
+  if (process.env.NODE_ENV !== 'test') {
+    const PORT = Number(process.env.PORT) || 3001;
+    const HOST = process.env.HOST || '127.0.0.1';
 
-  server.listen({ port: PORT, host: HOST }, (err, address) => {
-    if (err) {
-      server.log.error(err);
-      process.exit(1);
-    }
-    console.log(`Orquestrador rodando em: ${address}`);
-  });
+    server.listen({ port: PORT, host: HOST }, (err, address) => {
+      if (err) {
+        server.log.error(err);
+        process.exit(1);
+      }
+      console.log(`Orquestrador rodando em: ${address}`);
+    });
+  }
 }
 
-startServer();
+export { server, startServer };
+
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+

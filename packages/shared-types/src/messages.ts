@@ -31,6 +31,7 @@ export type MessageType =
   | 'answer.failed'
   | 'metrics.updated'
   | 'status.update'
+  | 'conversation.tone.updated'
   | 'error';
 
 // ============================================================
@@ -323,7 +324,7 @@ export interface StatusUpdatePayload {
 export interface WSMessage<T = unknown> {
   type: MessageType;
   sessionId?: string;
-  payload: T;
+  payload?: T;
 }
 
 // ============================================================
@@ -341,6 +342,30 @@ export interface ConversationSummary {
   summaryText: string;
   /** Timestamp da última atualização */
   lastUpdated: number;
+}
+
+// ============================================================
+// Temperatura da Conversa — Análise de Tom
+// ============================================================
+
+export type ConversationTone =
+  | 'neutro'
+  | 'amigável'
+  | 'tenso'
+  | 'disperso'
+  | 'interessado'
+  | 'confuso'
+  | 'formal';
+
+export interface ToneUpdatePayload {
+  /** Tom atual detectado */
+  tone: ConversationTone;
+  /** Confiança da detecção (0 a 1) */
+  confidence: number;
+  /** Descrição do estado da conversa */
+  summary: string;
+  /** Histórico de mudanças de tom (últimas N mudanças) */
+  trends?: Array<{ tone: ConversationTone; at: number }>;
 }
 
 // ============================================================

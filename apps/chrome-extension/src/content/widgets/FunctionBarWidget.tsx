@@ -16,7 +16,18 @@ import {
   Pause
 } from 'lucide-react';
 import { WidgetPosition, HUDLayoutMode } from '../widget-state';
-import { StatusUpdatePayload } from '@conversation-copilot/shared-types';
+import { StatusUpdatePayload, ConversationTone } from '@conversation-copilot/shared-types';
+
+/** Mapa de cores por tom de conversa */
+const TONE_COLORS: Record<ConversationTone, { bg: string; text: string; label: string }> = {
+  neutro:      { bg: '#94a3b8', text: '#f8fafc', label: 'Neutro' },
+  amigável:    { bg: '#22c55e', text: '#f8fafc', label: 'Amigável' },
+  tenso:       { bg: '#ef4444', text: '#f8fafc', label: 'Tenso' },
+  disperso:    { bg: '#f59e0b', text: '#0f0f23', label: 'Disperso' },
+  interessado: { bg: '#3b82f6', text: '#f8fafc', label: 'Interessado' },
+  confuso:     { bg: '#a855f7', text: '#f8fafc', label: 'Confuso' },
+  formal:      { bg: '#6366f1', text: '#f8fafc', label: 'Formal' }
+};
 
 interface FunctionBarWidgetProps {
   position: WidgetPosition;
@@ -38,6 +49,9 @@ interface FunctionBarWidgetProps {
   onOpenSettings: () => void;
   opacity: number;
   onOpacityChange: (opacity: number) => void;
+  tone?: ConversationTone;
+  toneConfidence?: number;
+  toneSummary?: string;
 }
 
 export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
@@ -59,7 +73,10 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
   onSaveSession,
   onOpenSettings,
   opacity,
-  onOpacityChange
+  onOpacityChange,
+  tone = 'neutro',
+  toneConfidence = 0.5,
+  toneSummary = ''
 }) => {
   const [openMenu, setOpenMenu] = useState<'status' | 'audio' | 'visual' | 'more' | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -295,6 +312,29 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
             <span style={{ color: '#94a3b8' }}>Servidor local:</span>
             <span style={{ color: '#38bdf8', fontWeight: 600 }}>Ativo</span>
           </div>
+
+          {isCapturing && (
+            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#94a3b8' }}>Tom da conversa:</span>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  color: TONE_COLORS[tone].text,
+                  backgroundColor: TONE_COLORS[tone].bg,
+                  padding: '2px 8px',
+                  borderRadius: '8px'
+                }}>
+                  {TONE_COLORS[tone].label}
+                </span>
+              </div>
+              {toneSummary && (
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
+                  {toneSummary}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

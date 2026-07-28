@@ -8,7 +8,7 @@ Real-time conversation copilot: Chrome extension captures meeting audio, sends i
 
 ## Regras de Execução & Validação do Agente (MANDATÓRIO)
 
-- **Cheque de Compilação & Testes Obrigatório**: **APÓS QUALQUER ALTERAÇÃO DE CÓDIGO** em qualquer arquivo do monorepo, o agente **DEVE OBRIGATORIAMENTE** executar os comandos de build e validação (`npm run build:types`, `npm run build:extension` e/ou `npm run build:orchestrator`) para comprovar que não há erros de compilação ou regressões de TypeScript antes de finalizar o atendimento.
+- **Cheque de Compilação & Testes Obrigatório**: **APÓS QUALQUER ALTERAÇÃO DE CÓDIGO** em qualquer arquivo do monorepo, o agente **DEVE OBRIGATORIAMENTE** executar os comandos de build e validação (`npm run build:types`, `npm run build:extension`, `npm run build:orchestrator` e `npm test` / `npm run test:e2e`) para comprovar que não há erros de compilação, regressões de TypeScript ou quebra de testes antes de finalizar o atendimento.
 - **Ordem de Build**: Caso tenha alterado `packages/shared-types`, executar `npm run build:types` PRIMEIRO antes de compilar os outros pacotes.
 - **Idioma**: Todo texto de interface, comentários e documentação deve ser estritamente em Português do Brasil (`pt-BR`).
 
@@ -20,7 +20,7 @@ npm workspaces (`packages/*`, `apps/*`):
 |:---|:---|:---|:---|
 | `@conversation-copilot/shared-types` | `packages/shared-types/` | TypeScript | Shared types (WebSocket protocol, settings, metrics) |
 | `@conversation-copilot/orchestrator` | `apps/orchestrator/` | Node.js + Fastify + WS | Core server: context, question detection, AI |
-| `@conversation-copilot/chrome-extension` | `apps/chrome-extension/` | React + Vite + Manifest V3 | UI: floating panel, audio capture, TTS |
+| `@conversation-copilot/chrome-extension` | `apps/chrome-extension/` | React + Vite + Manifest V3 | UI: floating panel, audio capture, TTS, E2E Playwright tests |
 | (no package.json) | `apps/transcription-service/` | Python + FastAPI + faster-whisper | Local speech-to-text |
 
 ## Build order (critical)
@@ -50,6 +50,12 @@ npm run build:extension
 
 # Orchestrator production build
 npm run build:orchestrator
+
+# Unit & Integration tests (Vitest)
+npm test
+
+# E2E tests for Chrome Extension & UI (Playwright)
+npm run test:e2e
 ```
 
 ## Docker
@@ -81,7 +87,7 @@ Key env vars: `WHISPER_MODEL` (default `small`), `WHISPER_DEVICE`, `WHISPER_COMP
 
 ## Diretrizes de UI & Usabilidade (Chrome Extension)
 
-- **Estilização em Shadow DOM**: O `content-script` roda isolado em Shadow DOM. Usar `React.CSSProperties` inline + `<style>` injetada no Shadow DOM para pseudo-classes/animações. Não utilizar Tailwind ou CSS externo que dependa de loaders runtime.
+- **Estilização em Shadow DOM**: O `content-script` roda isolado em Shadow DOM (`#conversation-copilot-host`). Usar `React.CSSProperties` inline + `<style>` injetada no Shadow DOM para pseudo-classes/animações. Não utilizar Tailwind ou CSS externo que dependa de loaders runtime.
 - **Redimensionamento do Painel**: O painel flutuante deve suportar redimensionamento livre (drag-to-resize) respeitando os limites: Largura Mínima: 280px / Máxima: 700px | Altura Mínima: 200px / Máxima: 90vh. Persistir dimensões no `localStorage` (`copilotDimensions`).
 - **Recursos de Usabilidade**: O painel deve suportar ajuste de opacidade/transparência (`copilotOpacity`), minimização rápida por duplo clique no header e feedback visual toast ao copiar texto (`Copiado! ✓`).
 - **Idioma**: Todo texto de interface, comentários e documentação deve ser estritamente em Português do Brasil (pt-BR).
@@ -89,10 +95,13 @@ Key env vars: `WHISPER_MODEL` (default `small`), `WHISPER_DEVICE`, `WHISPER_COMP
 ## Testing
 
 - **Regra Obrigatória**: Após qualquer alteração de código, rodar a suíte de build e testes para garantir que nada foi quebrado.
+- **Testes Unitários & Integração (Vitest)**: `npm test` executa testes dos serviços do Orquestrador (`WhisperClient`, `ContextManager`, `QuestionDetector`, servidores Fastify WebSocket e HTTP) e estado dos widgets.
+- **Testes End-to-End (Playwright)**: `npm run test:e2e` executa testes automatizados no Chromium carregando a Extensão Chrome Manifest V3 (`apps/chrome-extension/dist`), validando injeção no Shadow DOM, a barra de ferramentas HUD (`overlay.spec.ts`), o formulário de perfil e opções (`options.spec.ts`), a interface de popup (`popup.spec.ts`) e a busca no histórico (`storage-history.spec.ts`).
 
 ## Gotchas
 
 - `npm run build:types` must run before orchestrator or extension will resolve `@conversation-copilot/shared-types`.
+- `npm run build:extension` must run before `npm run test:e2e` so Playwright loads the latest built extension files from `apps/chrome-extension/dist`.
 - Whisper model loading takes 30-90s on first start. Health check won't pass until model is loaded.
 - Extension popup HTML path is referenced directly in `manifest.json` as `src/popup/popup.html` (not from `dist/`).
 - The `.env` file at root contains a real API key — never commit it.

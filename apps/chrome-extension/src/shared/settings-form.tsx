@@ -289,6 +289,37 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
                 onChange={e => setTtsVolume(parseFloat(e.target.value))}
                 style={{ width: '100%', accentColor: '#60a5fa' }} />
             </div>
+
+            <div style={{ ...fieldGroupStyle, marginTop: '8px', padding: '10px', backgroundColor: '#111827', borderRadius: '8px', border: '1px solid #374151' }}>
+              <label style={{ ...labelStyle, color: '#f3f4f6' }}>🎙️ Permissão de Microfone Local (Sua Voz)</label>
+              <p style={{ fontSize: '11px', color: '#9ca3af', margin: '4px 0 8px 0' }}>
+                Conceda permissão uma vez para que o assistente capture sua voz em conjunto com o áudio da reunião.
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(t => t.stop());
+                    alert('✓ Permissão do microfone concedida com sucesso!');
+                  } catch (err: any) {
+                    alert(`❌ Não foi possível acessar o microfone (${err?.name || 'Erro'}): ${err?.message || 'Permissão negada no navegador'}`);
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#3b82f6',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Autorizar Microfone Local
+              </button>
+            </div>
           </>
         )}
       </div>

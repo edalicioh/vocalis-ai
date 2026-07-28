@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Sparkles, Mic, Volume2, AlertTriangle, Pause, GripVertical } from 'lucide-react';
-import { StatusUpdatePayload } from '@conversation-copilot/shared-types';
+import { StatusUpdatePayload, ConversationTone } from '@conversation-copilot/shared-types';
 import { WidgetPosition } from '../widget-state';
 
 interface StatusIndicatorWidgetProps {
@@ -11,7 +11,21 @@ interface StatusIndicatorWidgetProps {
   isGenerating: boolean;
   isSpeaking: boolean;
   opacity: number;
+  tone?: ConversationTone;
+  toneConfidence?: number;
+  toneSummary?: string;
 }
+
+/** Mapa de cores por tom de conversa */
+const TONE_COLORS: Record<ConversationTone, { bg: string; text: string; label: string }> = {
+  neutro:      { bg: '#94a3b8', text: '#f8fafc', label: 'Neutro' },
+  amigável:    { bg: '#22c55e', text: '#f8fafc', label: 'Amigável' },
+  tenso:       { bg: '#ef4444', text: '#f8fafc', label: 'Tenso' },
+  disperso:    { bg: '#f59e0b', text: '#0f0f23', label: 'Disperso' },
+  interessado: { bg: '#3b82f6', text: '#f8fafc', label: 'Interessado' },
+  confuso:     { bg: '#a855f7', text: '#f8fafc', label: 'Confuso' },
+  formal:      { bg: '#6366f1', text: '#f8fafc', label: 'Formal' }
+};
 
 export const StatusIndicatorWidget: React.FC<StatusIndicatorWidgetProps> = ({
   position,
@@ -20,7 +34,10 @@ export const StatusIndicatorWidget: React.FC<StatusIndicatorWidgetProps> = ({
   isCapturing,
   isGenerating,
   isSpeaking,
-  opacity
+  opacity,
+  tone = 'neutro',
+  toneConfidence = 0.5,
+  toneSummary = ''
 }) => {
   const [showDetails, setShowDetails] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -126,6 +143,25 @@ export const StatusIndicatorWidget: React.FC<StatusIndicatorWidgetProps> = ({
         >
           {label}
         </span>
+
+        {isCapturing && tone !== 'neutro' && (
+          <span
+            style={{
+              fontSize: '9px',
+              fontWeight: 600,
+              color: TONE_COLORS[tone].text,
+              backgroundColor: TONE_COLORS[tone].bg,
+              padding: '2px 6px',
+              borderRadius: '8px',
+              letterSpacing: '0.3px',
+              whiteSpace: 'nowrap',
+              opacity: 0.85
+            }}
+            title={toneSummary}
+          >
+            {TONE_COLORS[tone].label}
+          </span>
+        )}
       </div>
 
       {showDetails && (
@@ -165,6 +201,22 @@ export const StatusIndicatorWidget: React.FC<StatusIndicatorWidgetProps> = ({
             <span style={{ color: '#94a3b8' }}>Servidor local:</span>
             <span style={{ color: '#38bdf8', fontWeight: 600 }}>Ativo</span>
           </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+            <span style={{ color: '#94a3b8' }}>Tom da conversa:</span>
+            <span style={{
+              color: TONE_COLORS[tone].bg,
+              fontWeight: 600,
+              fontSize: '10px'
+            }}>
+              {TONE_COLORS[tone].label} ({Math.round(toneConfidence * 100)}%)
+            </span>
+          </div>
+          {toneSummary && (
+            <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
+              {toneSummary}
+            </div>
+          )}
         </div>
       )}
     </div>

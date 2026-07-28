@@ -3,19 +3,24 @@ import {
   JobDescription,
   Utterance,
   ResponseMode,
-  ConversationSummary
+  ConversationSummary,
+  ConversationTone,
+  ToneUpdatePayload
 } from '@conversation-copilot/shared-types';
 
 /**
  * Gerenciador de contexto da conversa (RF-008).
- * 
+ *
  * Responsável por:
  * - Manter o perfil profissional e vaga
  * - Gerenciar a janela deslizante de falas recentes
  * - Manter o resumo acumulativo (RF-018)
  * - Montar o prompt com formato JSON estruturado (RF-009)
  * - Aplicar o modo de resposta selecionado (RF-017)
- * 
+ * - Gerenciar buffer de transcrições parciais
+ * - Rastrear duração de pausas entre falas
+ * - Armazenar o tom atual da conversa
+ *
  * A sumarização é assíncrona e não-bloqueante (RN-010).
  */
 export class ContextManager {
@@ -55,6 +60,26 @@ export class ContextManager {
   private readonly SUMMARY_TRIGGER_COUNT = 5;
   private finalUtterancesSinceLastSummary = 0;
 
+  // ========= Buffer de transcrições parciais =========
+
+  /** Texto acumulado de transcrições parciais recentes */
+  private partialBuffer: string[] = [];
+  private readonly MAX_PARTIAL_BUFFER = 5;
+
+  // ========= Rastreamento de pausa =========
+
+  /** Timestamp (ms) da última fala finalizada */
+  private lastFinalUtteranceTimestamp: number = 0;
+
+  // ========= Tom da conversa =========
+
+  private currentTone: ConversationTone = 'neutro';
+  private toneConfidence: number = 0.5;
+  private toneSummary: string = '';
+  private toneHistory: Array<{ tone: ConversationTone; at: number }> = [];
+  private readonly TONE_TRIGGER_COUNT = 8;
+  private finalUtterancesSinceLastToneAnalysis = 0;
+
   // ========= Atualização de perfil/vaga =========
 
   public updateProfile(profile: Partial<UserProfile>) {
@@ -91,6 +116,14 @@ export class ContextManager {
 
     if (isFinal) {
       this.finalUtterancesSinceLastSummary++;
+      this.finalUtterancesSinceLastToneAnalysis++;
+      this.lastFinalUtteranceTimestamp = utterance.timestamp;
+      this.partialBuffer = [];
+    } else {
+      this.partialBuffer.push(text);
+      if (this.partialBuffer.length > this.MAX_PARTIAL_BUFFER) {
+        this.partialBuffer.shift();
+      }
     }
 
     return utterance;
@@ -98,6 +131,105 @@ export class ContextManager {
 
   public getRecentUtterances(): Utterance[] {
     return this.utterances.slice(-this.MAX_WINDOW_SIZE);
+  }
+
+  // ========= Buffer de parciais =========
+
+  /**
+   * Retorna o texto acumulado das transcrições parciais anteriores.
+   * Usado pelo QuestionDetector para montar perguntas fragmentadas.
+   */
+  public getAccumulatedPartials(): string {
+    return this.partialBuffer.join(' ').trim();
+  }
+
+  // ========= Rastreamento de pausa =========
+
+  /**
+   * Calcula a duração da pausa desde a última fala finalizada.
+   * Retorna 0 se não houver fala anterior.
+   */
+  public getPauseSinceLastUtterance(): number {
+    if (this.lastFinalUtteranceTimestamp === 0) return 0;
+    return Date.now() - this.lastFinalUtteranceTimestamp;
+  }
+
+  // ========= Tom da conversa =========
+
+  /**
+   * Verifica se é hora de analisar o tom da conversa.
+   * Trigger: a cada 8 falas finais.
+   */
+  public shouldAnalyzeTone(): boolean {
+    return this.finalUtterancesSinceLastToneAnalysis >= this.TONE_TRIGGER_COUNT;
+  }
+
+  /**
+   * Atualiza o tom da conversa detectado.
+   */
+  public updateTone(tone: ConversationTone, confidence: number, summary: string) {
+    const previousTone = this.currentTone;
+    this.currentTone = tone;
+    this.toneConfidence = confidence;
+    this.toneSummary = summary;
+    this.finalUtterancesSinceLastToneAnalysis = 0;
+
+    if (previousTone !== tone) {
+      this.toneHistory.push({ tone, at: Date.now() });
+      if (this.toneHistory.length > 10) {
+        this.toneHistory = this.toneHistory.slice(-10);
+      }
+    }
+  }
+
+  /**
+   * Retorna o payload do tom atual para envio à extensão.
+   */
+  public getTonePayload(): ToneUpdatePayload {
+    return {
+      tone: this.currentTone,
+      confidence: this.toneConfidence,
+      summary: this.toneSummary,
+      trends: this.toneHistory.length > 0 ? [...this.toneHistory] : undefined
+    };
+  }
+
+  public getCurrentTone(): ConversationTone {
+    return this.currentTone;
+  }
+
+  /**
+   * Gera o prompt de análise de tom para ser processado em background.
+   */
+  public buildToneAnalysisPrompt(): string {
+    const recentDialogue = this.utterances
+      .filter(u => u.isFinal)
+      .map(u => `[${u.speaker.toUpperCase()}]: ${u.text}`)
+      .join('\n');
+
+    return `
+Analise o tom emocional e o clima da conversa a seguir.
+Classifique o tom geral em UMA das categorias: neutro, amigável, tenso, disperso, interessado, confuso, formal.
+
+Considere:
+- Densidade de perguntas vs respostas
+- Comprimento e tom das respostas (curtas = tenso/disperso, longas = interessado/amigável)
+- Presença de mal-entendidos ou pedidos de repetição (= confuso)
+- Formalidade do vocabulário
+- Engajamento geral dos participantes
+
+Conversa:
+${recentDialogue}
+
+Tom atual armazenado: ${this.currentTone}
+
+Retorne EXATAMENTE neste formato JSON:
+{
+  "tone": "um dos: neutro | amigável | tenso | disperso | interessado | confuso | formal",
+  "confidence": 0.0 a 1.0,
+  "summary": "Descrição curta do clima (máx. 40 palavras)"
+}
+`.trim();
   }
 
   // ========= Sumarização (RF-018) =========
@@ -160,7 +292,7 @@ Retorne em formato JSON:
 
   /**
    * Monta o prompt completo para envio à API de IA.
-   * 
+   *
    * Inclui:
    * - Perfil profissional resumido (RF-015)
    * - Descrição da vaga resumida (RF-016)
@@ -169,7 +301,7 @@ Retorne em formato JSON:
    * - Últimas falas
    * - Pergunta atual
    * - Modo de resposta (RF-017)
-   * 
+   *
    * O currículo é usado apenas quando relevante (RN-006).
    * A vaga influencia os exemplos e tecnologias (RN-007).
    */

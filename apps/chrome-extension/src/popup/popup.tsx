@@ -5,12 +5,20 @@ import { SettingsForm } from '../shared/settings-form';
 const PopupSettings: React.FC = () => {
   const [pageStatus, setPageStatus] = useState<{ isMeeting: boolean; isEnabledManually: boolean; isMounted: boolean } | null>(null);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [capturePending, setCapturePending] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
 
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tab = tabs[0];
       if (tab?.id) {
         setActiveTabId(tab.id);
+        chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATE', tabId: tab.id }, (captureState) => {
+          if (!chrome.runtime.lastError) {
+            setIsCapturing(Boolean(captureState?.isCapturing));
+          }
+        });
         chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_STATUS' }, (res) => {
           if (chrome.runtime.lastError) {
             // Ignora se a aba for restrita (chrome://) ou se o script ainda não tiver respondido
@@ -24,15 +32,102 @@ const PopupSettings: React.FC = () => {
     });
   }, []);
 
-  const handleTogglePageCopilot = () => {
-    if (activeTabId) {
-      chrome.tabs.sendMessage(activeTabId, { type: 'TOGGLE_PAGE_COPILOT' }, (res) => {
-        if (chrome.runtime.lastError) {
-          return;
+  const notifyCaptureState = (isActive: boolean) => {
+    if (!activeTabId) return;
+    chrome.tabs.sendMessage(
+      activeTabId,
+      { type: 'CAPTURE_STATE_CHANGED', isCapturing: isActive },
+      () => void chrome.runtime.lastError
+    );
+  };
+
+  const updatePageStatus = (isMounted: boolean) => {
+    setPageStatus(prev => prev ? {
+      ...prev,
+      isMounted,
+      isEnabledManually: prev.isMeeting ? prev.isEnabledManually : isMounted
+    } : null);
+  };
+
+  const togglePageActivation = (callback: (isMounted: boolean) => void) => {
+    if (!activeTabId) return;
+    chrome.tabs.sendMessage(activeTabId, { type: 'TOGGLE_PAGE_COPILOT' }, (response) => {
+      if (chrome.runtime.lastError) {
+        setCapturePending(false);
+        setCaptureError(chrome.runtime.lastError.message || 'Não foi possível alterar a ativação nesta página.');
+        return;
+      }
+
+      const isMounted = Boolean(response?.isMounted);
+      updatePageStatus(isMounted);
+      callback(isMounted);
+    });
+  };
+
+  const startCapture = (activatedNow: boolean) => {
+    if (!activeTabId) return;
+    chrome.tabs.sendMessage(activeTabId, { type: 'GET_COPILOT_SESSION' }, (sessionResponse) => {
+      if (chrome.runtime.lastError || !sessionResponse?.sessionId) {
+        setCapturePending(false);
+        setCaptureError('A sessão do Copiloto ainda não está pronta. Atualize a página e tente novamente.');
+        if (activatedNow) togglePageActivation(() => undefined);
+        return;
+      }
+
+      chrome.runtime.sendMessage(
+        { type: 'START_CAPTURE', tabId: activeTabId, sessionId: sessionResponse.sessionId },
+        (response) => {
+          setCapturePending(false);
+          if (chrome.runtime.lastError) {
+            setCaptureError(chrome.runtime.lastError.message || 'Falha ao comunicar com a extensão.');
+            if (activatedNow) togglePageActivation(() => undefined);
+            return;
+          }
+
+          if (response?.status === 'ok') {
+            setIsCapturing(true);
+            notifyCaptureState(true);
+          } else {
+            setCaptureError(response?.error || 'Não foi possível iniciar a captura de áudio.');
+            if (activatedNow) togglePageActivation(() => undefined);
+          }
         }
-        if (res) {
-          setPageStatus(prev => prev ? { ...prev, isMounted: res.isMounted, isEnabledManually: !prev.isEnabledManually } : null);
-        }
+      );
+    });
+  };
+
+  const stopCapture = () => {
+    if (!activeTabId || !pageStatus) return;
+    chrome.runtime.sendMessage({ type: 'STOP_CAPTURE', tabId: activeTabId }, (response) => {
+      if (chrome.runtime.lastError || response?.status !== 'ok') {
+        setCapturePending(false);
+        setCaptureError(response?.error || chrome.runtime.lastError?.message || 'Não foi possível parar a captura.');
+        return;
+      }
+
+      setIsCapturing(false);
+      notifyCaptureState(false);
+      if (!pageStatus.isMeeting && pageStatus.isMounted) {
+        togglePageActivation(() => setCapturePending(false));
+      } else {
+        setCapturePending(false);
+      }
+    });
+  };
+
+  const handlePrimaryAction = () => {
+    if (!activeTabId || !pageStatus || capturePending) return;
+    setCapturePending(true);
+    setCaptureError(null);
+
+    if (isCapturing) {
+      stopCapture();
+    } else if (pageStatus.isMounted) {
+      startCapture(false);
+    } else {
+      togglePageActivation((isMounted) => {
+        if (isMounted) startCapture(true);
+        else setCapturePending(false);
       });
     }
   };
@@ -43,35 +138,44 @@ const PopupSettings: React.FC = () => {
         <h2 style={titleStyle}>🎙️ Copiloto de Conversas</h2>
       </div>
 
-      {/* Card de Controle de Ativação da Página Atual */}
+      {/* Controle único de ativação e captura */}
       <div style={pageCardStyle}>
-        <div style={{ fontSize: '11px', color: '#9ca3af' }}>
-          Status nesta página:
+        <div style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc' }}>
+          Copiloto nesta página
         </div>
-        {pageStatus?.isMeeting ? (
-          <div style={{ fontSize: '12px', fontWeight: 600, color: '#10b981' }}>
-            🌐 Reunião Detectada (Ativo Automático)
-          </div>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span style={{ fontSize: '11px', color: pageStatus?.isMounted ? '#60a5fa' : '#6b7280' }}>
-              {pageStatus?.isMounted ? '✨ Ativo Sob Demanda' : '⚪ Oculto por padrão'}
-            </span>
-            <button
-              onClick={handleTogglePageCopilot}
-              style={{
-                backgroundColor: pageStatus?.isMounted ? 'rgba(239, 68, 68, 0.2)' : '#2563eb',
-                color: pageStatus?.isMounted ? '#fca5a5' : '#ffffff',
-                border: pageStatus?.isMounted ? '1px solid #ef4444' : 'none',
-                padding: '4px 10px',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              {pageStatus?.isMounted ? 'Desativar nesta página' : '⚡ Ativar nesta página'}
-            </button>
+        <div style={{ marginTop: '2px', fontSize: '10px', color: '#94a3b8', lineHeight: 1.4 }}>
+          {isCapturing
+            ? 'Captura ativa. A transcrição está sendo enviada ao Copiloto.'
+            : pageStatus?.isMounted
+              ? 'Copiloto ativo. Inicie a captura de áudio quando estiver pronto.'
+              : 'Ative o Copiloto e inicie a captura de áudio em uma única ação.'}
+        </div>
+        <button
+          onClick={handlePrimaryAction}
+          disabled={!activeTabId || !pageStatus || capturePending}
+          style={{
+            marginTop: '8px',
+            width: '100%',
+            padding: '8px 12px',
+            border: 'none',
+            borderRadius: '8px',
+            backgroundColor: isCapturing ? '#dc2626' : '#2563eb',
+            color: '#ffffff',
+            fontSize: '12px',
+            fontWeight: 700,
+            cursor: !activeTabId || !pageStatus || capturePending ? 'not-allowed' : 'pointer',
+            opacity: !activeTabId || !pageStatus || capturePending ? 0.55 : 1
+          }}
+        >
+          {capturePending
+            ? 'Processando...'
+            : isCapturing
+              ? pageStatus?.isMeeting ? 'Parar captura' : 'Parar e desativar'
+              : pageStatus?.isMounted ? 'Iniciar captura' : 'Ativar e iniciar captura'}
+        </button>
+        {captureError && (
+          <div role="alert" style={{ marginTop: '6px', color: '#fca5a5', fontSize: '10px', lineHeight: 1.4 }}>
+            {captureError}
           </div>
         )}
       </div>

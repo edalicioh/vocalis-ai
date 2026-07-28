@@ -44,13 +44,13 @@ chrome.runtime.onMessage.addListener((message) => {
         ws.send(JSON.stringify({ type: 'session.register', sessionId: activeSessionId, payload: {} }));
       }
     }
-    startCapture(message.streamId, message.mediaSource === 'desktop' ? 'desktop' : 'tab');
+    startCapture(message.streamId);
   } else if (message.type === 'STOP_AUDIO_CAPTURE') {
     stopCapture();
   }
 });
 
-async function startCapture(streamId: string, mediaSource: 'tab' | 'desktop') {
+async function startCapture(streamId: string) {
   try {
     stopCapture(false);
 
@@ -59,7 +59,7 @@ async function startCapture(streamId: string, mediaSource: 'tab' | 'desktop') {
       audio: {
         // @ts-ignore
         mandatory: {
-          chromeMediaSource: mediaSource,
+          chromeMediaSource: 'tab',
           chromeMediaSourceId: streamId
         }
       },
@@ -77,8 +77,10 @@ async function startCapture(streamId: string, mediaSource: 'tab' | 'desktop') {
         video: false
       });
       console.log('[Offscreen] Microfone local (sua voz) capturado com sucesso.');
-    } catch (micErr) {
-      console.warn('[Offscreen] Microfone local indisponível ou permissão negada. Continuando apenas com o áudio da aba:', micErr);
+    } catch (micErr: any) {
+      const errName = micErr?.name || 'DOMException';
+      const errMsg = micErr?.message || String(micErr);
+      console.warn(`[Offscreen] Microfone local indisponível ou permissão negada (${errName}: ${errMsg}). Continuando apenas com o áudio da aba.`);
     }
 
     // 3. Criar AudioContext configurado em 16kHz

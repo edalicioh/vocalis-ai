@@ -3,6 +3,21 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 let creatingOffscreen: Promise<void> | null = null;
+const tabSessions = new Map<number, string>();
+const capturingTabs = new Set<number>();
+const TAB_SESSION_PREFIX = 'copilotTabSession:';
+const CAPTURE_STATE_PREFIX = 'copilotCaptureState:';
+
+async function getTabSession(tabId: number): Promise<string | undefined> {
+  const cached = tabSessions.get(tabId);
+  if (cached) return cached;
+
+  const key = `${TAB_SESSION_PREFIX}${tabId}`;
+  const stored = await chrome.storage.session.get(key);
+  const sessionId = stored[key] as string | undefined;
+  if (sessionId) tabSessions.set(tabId, sessionId);
+  return sessionId;
+}
 
 async function setupOffscreenDocument(path: string) {
   const existingContexts = await chrome.runtime.getContexts({
@@ -44,37 +59,38 @@ async function closeOffscreenDocument() {
 function getTabMediaStreamId(targetTabId: number): Promise<string> {
   return new Promise((resolve, reject) => {
     chrome.tabCapture.getMediaStreamId({ targetTabId }, (id) => {
-      if (!chrome.runtime.lastError) {
-        resolve(id);
-        return;
-      }
-
-      chrome.tabCapture.getMediaStreamId({}, (fallbackId) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(fallbackId);
-        }
-      });
-    });
-  });
-}
-
-function chooseTabMediaStream(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    chrome.desktopCapture.chooseDesktopMedia(['tab', 'audio'], (streamId, options) => {
-      if (!streamId) {
-        reject(new Error('A seleção da aba foi cancelada.'));
-      } else if (!options.canRequestAudioTrack) {
-        reject(new Error('Selecione uma aba e marque “Compartilhar áudio”.'));
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
       } else {
-        resolve(streamId);
+        resolve(id);
       }
     });
   });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'REGISTER_TAB_SESSION' && sender.tab?.id && message.sessionId) {
+    tabSessions.set(sender.tab.id, message.sessionId);
+    chrome.storage.session.set({ [`${TAB_SESSION_PREFIX}${sender.tab.id}`]: message.sessionId });
+    sendResponse({ status: 'ok' });
+    return;
+  }
+
+  if (message.type === 'GET_CAPTURE_STATE') {
+    (async () => {
+      const targetTabId = message.tabId || sender.tab?.id;
+      if (!targetTabId) {
+        sendResponse({ isCapturing: false });
+        return;
+      }
+
+      const key = `${CAPTURE_STATE_PREFIX}${targetTabId}`;
+      const stored = await chrome.storage.session.get(key);
+      sendResponse({ isCapturing: capturingTabs.has(targetTabId) || stored[key] === true });
+    })();
+    return true;
+  }
+
   if (message.type === 'START_CAPTURE') {
     (async () => {
       try {
@@ -88,22 +104,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           throw new Error('Não foi possível identificar a aba para captura.');
         }
 
-        const sessionId = message.sessionId;
+        const sessionId = message.sessionId || await getTabSession(targetTabId);
         if (!sessionId) {
           throw new Error('A sessão do Copiloto ainda não está disponível nesta aba. Atualize a página e tente novamente.');
         }
 
-        let mediaSource: 'tab' | 'desktop' = 'tab';
-        let streamId: string;
-
-        try {
-          streamId = await getTabMediaStreamId(targetTabId);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (!message.includes('not been invoked')) throw error;
-          streamId = await chooseTabMediaStream();
-          mediaSource = 'desktop';
-        }
+        const streamId = await getTabMediaStreamId(targetTabId);
 
         const offscreenUrl = chrome.runtime.getURL('src/offscreen/offscreen.html');
         await setupOffscreenDocument(offscreenUrl);
@@ -111,15 +117,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.runtime.sendMessage({
           type: 'INIT_AUDIO_CAPTURE',
           streamId,
-          sessionId,
-          mediaSource
+          sessionId
         });
 
+        capturingTabs.add(targetTabId);
+        await chrome.storage.session.set({ [`${CAPTURE_STATE_PREFIX}${targetTabId}`]: true });
         sendResponse({ status: 'ok' });
       } catch (err: any) {
         if (err.message && err.message.includes('active stream')) {
           console.log('[Service Worker] A captura de áudio já está ativa nesta aba.');
           sendResponse({ status: 'ok', active: true });
+        } else if (err.message && err.message.includes('not been invoked')) {
+          sendResponse({
+            status: 'need_invocation',
+            error: 'Abra o popup da extensão para autorizar a captura nesta aba.'
+          });
         } else {
           console.error('[Service Worker] Erro na captura de áudio:', err.message);
           sendResponse({ status: 'error', error: err.message });
@@ -133,12 +145,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'STOP_CAPTURE') {
     (async () => {
       try {
+        let targetTabId = message.tabId || sender.tab?.id;
+        if (!targetTabId) {
+          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          targetTabId = activeTab?.id;
+        }
+
         // 1. Para a captura de áudio no offscreen
         chrome.runtime.sendMessage({ type: 'STOP_AUDIO_CAPTURE' });
 
         // 2. Fecha o offscreen document para liberar recursos
         await closeOffscreenDocument();
 
+        if (targetTabId) {
+          capturingTabs.delete(targetTabId);
+          await chrome.storage.session.remove(`${CAPTURE_STATE_PREFIX}${targetTabId}`);
+        }
         sendResponse({ status: 'ok' });
       } catch (err: any) {
         console.error('Erro ao parar captura:', err);
@@ -147,6 +169,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true; // async
   }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  tabSessions.delete(tabId);
+  capturingTabs.delete(tabId);
+  chrome.storage.session.remove([
+    `${TAB_SESSION_PREFIX}${tabId}`,
+    `${CAPTURE_STATE_PREFIX}${tabId}`
+  ]);
 });
 
 // Atalho Alt+S para forçar sugestão

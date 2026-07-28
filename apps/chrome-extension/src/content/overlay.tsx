@@ -11,7 +11,9 @@ import {
   AnswerStartedPayload,
   AnswerDeltaPayload,
   AnswerCompletedPayload,
-  SavedConversation
+  SavedConversation,
+  ToneUpdatePayload,
+  ConversationTone
 } from '@conversation-copilot/shared-types';
 import { saveConversation, triggerMarkdownDownload } from '../shared/conversation-storage';
 import {
@@ -38,9 +40,11 @@ import { TranscriptionWidget } from './widgets/TranscriptionWidget';
 
 const speechManager = new SpeechManager();
 
-export const CopilotOverlay: React.FC = () => {
-  // --- Session ID da aba ---
-  const [tabSessionId] = useState(() => 'session-tab-' + Math.random().toString(36).substring(2, 9));
+interface CopilotOverlayProps {
+  tabSessionId: string;
+}
+
+export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) => {
 
   // --- Estados e Posições dos Widgets HUD ---
   const [widgetPositions, setWidgetPositions] = useState<WidgetPositionsMap>(loadWidgetPositions);
@@ -65,6 +69,11 @@ export const CopilotOverlay: React.FC = () => {
   const [completedSuggestions, setCompletedSuggestions] = useState<Suggestion[]>([]);
   const [activeSuggestion, setActiveSuggestion] = useState<Suggestion | null>(null);
   const [detectedQuestion, setDetectedQuestion] = useState<QuestionDetectionResult | null>(null);
+
+  // --- Tom da Conversa ---
+  const [tone, setTone] = useState<ConversationTone>('neutro');
+  const [toneConfidence, setToneConfidence] = useState<number>(0.5);
+  const [toneSummary, setToneSummary] = useState<string>('');
 
   // --- TTS State ---
   const [isTtsMuted, setIsTtsMuted] = useState(false);
@@ -159,6 +168,7 @@ export const CopilotOverlay: React.FC = () => {
 
   useEffect(() => {
     connectWebSocket();
+    chrome.runtime.sendMessage({ type: 'REGISTER_TAB_SESSION', sessionId: tabSessionId });
 
     speechManager.setOnSentenceStart((index) => {
       setActiveSentenceIndex(index);
@@ -171,6 +181,28 @@ export const CopilotOverlay: React.FC = () => {
 
     const handleForceTrigger = () => {
       sendWsMessage({ type: 'answer.force', payload: {} });
+    };
+
+    const handleCaptureStateChange = (event: Event) => {
+      const { isCapturing: nextCapturing } = (event as CustomEvent<{ isCapturing: boolean }>).detail;
+      setIsCapturing(nextCapturing);
+      setCaptureError(null);
+
+      if (nextCapturing) {
+        setWidgetStates(prev => {
+          const next = {
+            ...prev,
+            functionBar: { ...prev.functionBar, visible: true },
+            transcription: { visible: true, minimized: false },
+            response: { visible: true, minimized: false }
+          };
+          saveWidgetStates(next);
+          return next;
+        });
+        sendWsMessage({ type: 'session.start', payload: {} });
+      } else {
+        sendWsMessage({ type: 'session.stop', payload: {} });
+      }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -196,12 +228,14 @@ export const CopilotOverlay: React.FC = () => {
     };
 
     window.addEventListener('copilot:force-trigger', handleForceTrigger);
+    window.addEventListener('copilot:capture-state-changed', handleCaptureStateChange);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       wsRef.current?.close();
       speechManager.cancel();
       window.removeEventListener('copilot:force-trigger', handleForceTrigger);
+      window.removeEventListener('copilot:capture-state-changed', handleCaptureStateChange);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
@@ -347,6 +381,14 @@ export const CopilotOverlay: React.FC = () => {
         }
         break;
       }
+
+      case 'conversation.tone.updated': {
+        const tonePayload = msg.payload as ToneUpdatePayload;
+        setTone(tonePayload.tone);
+        setToneConfidence(tonePayload.confidence);
+        setToneSummary(tonePayload.summary);
+        break;
+      }
     }
   };
 
@@ -378,6 +420,9 @@ export const CopilotOverlay: React.FC = () => {
             setIsCapturing(true);
             setCaptureError(null);
             sendWsMessage({ type: 'session.start', payload: {} });
+          } else if (response?.status === 'need_invocation') {
+            setIsCapturing(false);
+            setCaptureError('Abra o popup da extensão e inicie a captura por ele.');
           } else if (response?.status === 'error') {
             console.error('[Overlay] Falha ao iniciar captura:', response.error);
             setIsCapturing(false);
@@ -460,6 +505,9 @@ export const CopilotOverlay: React.FC = () => {
             setOpacity(nextOpacity);
             saveOpacity(nextOpacity);
           }}
+          tone={tone}
+          toneConfidence={toneConfidence}
+          toneSummary={toneSummary}
         />
       )}
 

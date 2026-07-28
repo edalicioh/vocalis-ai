@@ -15,6 +15,7 @@
     "build:orchestrator": "npm --prefix apps/orchestrator run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "docker:gpu": "docker compose --profile gpu up -d",
     "docker:cpu": "docker compose --profile cpu up -d",
     "docker:build": "docker compose --profile gpu build --no-cache",
@@ -23,6 +24,7 @@
     "docker:status": "docker compose ps"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "vitest": "^1.6.1"
   }
 }

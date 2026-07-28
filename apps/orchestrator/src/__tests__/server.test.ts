@@ -1,0 +1,116 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import WebSocket from 'ws';
+import { server, startServer } from '../server.js';
+import { WSMessage, StatusUpdatePayload } from '@conversation-copilot/shared-types';
+
+describe('Orchestrator Fastify Server & WebSocket Interface', () => {
+  let serverAddress: string;
+
+  beforeAll(async () => {
+    // Inicializa os plugins do servidor fastify
+    await startServer();
+    // Escuta em uma porta efêmera aleatória para os testes de integração
+    const address = await server.listen({ port: 0, host: '127.0.0.1' });
+    serverAddress = address;
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it('deve responder OK no endpoint GET /health', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/health'
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.payload);
+    expect(body.status).toBe('ok');
+    expect(body.whisperConnected).toBeDefined();
+    expect(body.llmConfigured).toBeDefined();
+  });
+
+  it('deve aceitar conexões WebSocket no endpoint /ws e responder com status.update ao evento session.start', async () => {
+    const wsUrl = serverAddress.replace('http://', 'ws://') + '/ws';
+    const ws = new WebSocket(wsUrl);
+
+    const receivedMessages: WSMessage[] = [];
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => {
+        // Envia mensagem session.start
+        const startMsg: WSMessage = {
+          type: 'session.start',
+          sessionId: 'test-session-123'
+        };
+        ws.send(JSON.stringify(startMsg));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString()) as WSMessage;
+        receivedMessages.push(msg);
+
+        if (msg.type === 'status.update') {
+          resolve();
+        }
+      });
+
+      ws.on('error', (err) => reject(err));
+    });
+
+    ws.close();
+
+    expect(receivedMessages.length).toBeGreaterThan(0);
+    const statusMsg = receivedMessages.find((m) => m.type === 'status.update');
+    expect(statusMsg).toBeDefined();
+    expect(statusMsg?.sessionId).toBe('test-session-123');
+
+    const payload = statusMsg?.payload as StatusUpdatePayload;
+    expect(payload.isCapturing).toBe(true);
+    expect(payload.activeSessionId).toBe('test-session-123');
+  });
+
+  it('deve processar o evento settings.update e transmitir o status atualizado', async () => {
+    const wsUrl = serverAddress.replace('http://', 'ws://') + '/ws';
+    const ws = new WebSocket(wsUrl);
+
+    const receivedMessages: WSMessage[] = [];
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => {
+        const settingsMsg: WSMessage = {
+          type: 'settings.update',
+          sessionId: 'test-session-settings',
+          payload: {
+            responseMode: 'full',
+            userProfile: {
+              name: 'Maria QA',
+              role: 'Engenheira de Testes'
+            }
+          }
+        };
+        ws.send(JSON.stringify(settingsMsg));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString()) as WSMessage;
+        receivedMessages.push(msg);
+        if (msg.type === 'status.update') {
+          resolve();
+        }
+      });
+
+      ws.on('error', (err) => reject(err));
+    });
+
+    ws.close();
+
+    const statusMsg = receivedMessages.find((m) => m.type === 'status.update');
+    expect(statusMsg).toBeDefined();
+    expect(statusMsg?.sessionId).toBe('test-session-settings');
+
+    const payload = statusMsg?.payload as StatusUpdatePayload;
+    expect(payload.responseMode).toBe('full');
+  });
+});

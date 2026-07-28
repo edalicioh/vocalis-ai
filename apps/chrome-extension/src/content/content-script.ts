@@ -4,6 +4,7 @@ import { CopilotOverlay } from './overlay';
 import { injectStyles } from './styles-injection';
 
 const HOST_ID = 'conversation-copilot-host';
+const TAB_SESSION_ID = 'session-tab-' + Math.random().toString(36).substring(2, 9);
 const MEETING_DOMAINS = [
   'meet.google.com',
   'zoom.us',
@@ -37,7 +38,7 @@ function mountOverlay() {
   shadowRoot.appendChild(mountPoint);
 
   const root = createRoot(mountPoint);
-  root.render(React.createElement(CopilotOverlay));
+  root.render(React.createElement(CopilotOverlay, { tabSessionId: TAB_SESSION_ID }));
 
   console.log('[Content Script] Copiloto de Conversas montado com sucesso via Shadow DOM.');
 }
@@ -86,6 +87,13 @@ try {
     if (!isExtensionValid()) return;
     if (msg?.type === 'HOTKEY_TRIGGER') {
       window.dispatchEvent(new CustomEvent('copilot:force-trigger'));
+    } else if (msg?.type === 'CAPTURE_STATE_CHANGED') {
+      window.dispatchEvent(new CustomEvent('copilot:capture-state-changed', {
+        detail: { isCapturing: Boolean(msg.isCapturing) }
+      }));
+      sendResponse({ status: 'ok' });
+    } else if (msg?.type === 'GET_COPILOT_SESSION') {
+      sendResponse({ sessionId: TAB_SESSION_ID });
     } else if (msg?.type === 'GET_PAGE_STATUS') {
       const isMeeting = isMeetingPage();
       const host = window.location.hostname;

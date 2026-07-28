@@ -13,6 +13,7 @@ Assistente em tempo real que transcreve reuniões, detecta perguntas e sugere re
 - [Deploy com Docker (Produção)](#deploy-com-docker-produção)
 - [Extensão Chrome](#extensão-chrome)
 - [Configuração](#configuração)
+- [Testes Automatizados](#testes-automatizados)
 - [Uso](#uso)
 - [API e Health Checks](#api-e-health-checks)
 - [Troubleshooting](#troubleshooting)
@@ -38,7 +39,7 @@ Chrome (Google Meet/Teams) → Extensão Chrome → WebSocket → Orquestrador N
 
 | Componente | Tecnologia | Porta | Descrição |
 | :--- | :--- | :---: | :--- |
-| **Extensão Chrome** | React + TypeScript + Manifest V3 | — | Captura áudio, painel flutuante, TTS |
+| **Extensão Chrome** | React + TypeScript + Manifest V3 | — | Captura áudio, painel flutuante, TTS, E2E Playwright |
 | **Orquestrador** | Node.js + Fastify + WebSocket | `3001` | Núcleo do sistema: contexto, detecção, IA |
 | **Whisper** | Python + FastAPI + faster-whisper | `8000` | Transcrição local com GPU/CPU |
 | **API de IA** | Google Gemini (substituível) | externa | Geração de sugestões |
@@ -264,6 +265,42 @@ npm run build:extension
 
 ---
 
+## Testes Automatizados
+
+O projeto utiliza duas ferramentas de testes automatizados para garantir qualidade, resiliência e ausência de regressões:
+
+### 1. Testes Unitários e de Integração (Vitest)
+
+Testam os componentes do Orquestrador (`WhisperClient`, `ContextManager`, `QuestionDetector`, `AnswerProviderManager`, rotas HTTP e WebSocket do Fastify) e utilitários de estado da extensão.
+
+```bash
+# Executa a suíte de testes unitários e de integração
+npm test
+
+# Modo de observação (watch)
+npm run test:watch
+```
+
+### 2. Testes End-to-End — E2E (Playwright)
+
+Carregam a extensão Chrome Manifest V3 compilada (`apps/chrome-extension/dist`) em uma instância real do Chromium com perfis isolados.
+
+```bash
+# Executa o build da extensão primeiro (obrigatório)
+npm run build:extension
+
+# Executa a suíte de testes E2E do Playwright
+npm run test:e2e
+```
+
+**Cenários cobertos pelos testes E2E**:
+- `overlay.spec.ts`: Injeção do container Shadow DOM (`#conversation-copilot-host`), barra de ferramentas HUD e disparo de eventos.
+- `popup.spec.ts`: Interface de atalho e status de ativação da aba.
+- `options.spec.ts`: Formulário de Perfil do Candidato (`SettingsForm`), dados da vaga e persistência no storage.
+- `storage-history.spec.ts`: Listagem de reuniões salvas no `chrome.storage.local` e busca por palavra-chave.
+
+---
+
 ## Uso
 
 ### Fluxo básico
@@ -401,17 +438,23 @@ docker compose --profile cpu up -d
 conversation-copilot/
 ├── apps/
 │   ├── chrome-extension/       # Extensão Chrome (React + Manifest V3)
+│   │   ├── e2e/                # Suíte de testes End-to-End (Playwright)
+│   │   │   ├── options.spec.ts
+│   │   │   ├── overlay.spec.ts
+│   │   │   ├── popup.spec.ts
+│   │   │   └── storage-history.spec.ts
 │   │   ├── src/
 │   │   │   ├── background/     # Service Worker
-│   │   │   ├── content/        # Content Script + Overlay (painel flutuante)
+│   │   │   ├── content/        # Content Script + Overlay (Shadow DOM)
 │   │   │   ├── offscreen/      # Captura de áudio (Offscreen Document)
-│   │   │   ├── popup/          # Popup de configurações
+│   │   │   ├── options/        # Página de opções e histórico
+│   │   │   ├── popup/          # Popup de configurações rápidas
 │   │   │   └── tts/            # Gerenciador de TTS
 │   │   ├── manifest.json
 │   │   └── vite.config.ts
 │   ├── orchestrator/           # Orquestrador Node.js (Fastify)
 │   │   ├── src/
-│   │   │   ├── server.ts       # Servidor principal
+│   │   │   ├── server.ts       # Servidor principal Fastify / WS
 │   │   │   └── services/       # Serviços (IA, contexto, detecção, Whisper)
 │   │   └── Dockerfile
 │   └── transcription-service/  # Serviço Whisper (Python + FastAPI)
@@ -421,10 +464,10 @@ conversation-copilot/
 │       └── Dockerfile.cpu      # CPU only
 ├── packages/
 │   └── shared-types/           # Tipos TypeScript compartilhados
-├── context/
-│   └── plans/                  # Planos de fase do projeto
 ├── docker-compose.yml          # Orquestração dos containers
 ├── .env.example                # Template de variáveis de ambiente
+├── playwright.config.ts        # Configuração dos testes E2E Playwright
+├── vitest.config.ts            # Configuração dos testes unitários Vitest
 └── package.json                # Workspace root
 ```
 
