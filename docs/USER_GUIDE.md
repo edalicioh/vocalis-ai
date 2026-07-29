@@ -84,6 +84,15 @@ uvicorn main:app --port 8000
 
 ## 5. Recursos & Configurações da Interface
 
+### Detecção de Perguntas e Tom
+A página de Opções oferece dois modos:
+- **Local (padrão)**: perguntas e tom são classificados no orquestrador local, sem chamadas externas de classificação.
+- **Híbrido**: perguntas ambíguas podem ser validadas pelo provedor configurado, e o tom pode ser refinado periodicamente em segundo plano.
+
+No modo híbrido, são enviados somente o resumo acumulado, as oito falas finais mais recentes e o modo da reunião. Perguntas claras continuam sendo detectadas imediatamente no processamento local. Se a validação externa exceder o tempo limite ou falhar, o resultado local é mantido.
+
+Essa configuração controla a detecção de perguntas e tom. A geração de respostas e atas continua seguindo o provedor de IA escolhido nas configurações.
+
 ### Modos de Reunião Adaptativos
 Você pode alterar o modo a qualquer momento no HUD:
 - **🎯 Entrevista Técnica**: Foco em conceitos de programação, algoritmos e boas práticas.

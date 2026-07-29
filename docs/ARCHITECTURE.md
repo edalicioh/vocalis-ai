@@ -62,7 +62,24 @@ O projeto utiliza **npm workspaces** com TypeScript fortemente tipado:
 
 ---
 
-## 3. Pipeline de Áudio & Processamento Local
+## 3. Detecção de Perguntas e Tom
+
+O orquestrador usa análise local por padrão e preserva os eventos `question.detected` e `conversation.tone.updated`:
+
+1. O `QuestionDetector` classifica localmente perguntas explícitas e solicitações inequívocas.
+2. Sinais intermediários, entre `0,25` e `0,65`, podem ser validados pelo `ExternalConversationAnalyzer` somente quando o modo híbrido está habilitado.
+3. O `ToneAnalyzer` calcula o tom local com peso por recência, evidência mínima e margem entre categorias.
+4. No modo híbrido, o tom pode ser refinado externamente a cada oito falas finais, desde que nenhuma resposta ou validação de pergunta esteja em andamento.
+5. A análise externa recebe apenas o resumo acumulado, as oito falas finais mais recentes e o modo da reunião. Falas parciais e identificadores técnicos não são enviados.
+6. Validações antigas, requisições encerradas e resultados obsoletos são cancelados com `AbortController`.
+
+O modo `local` se aplica à detecção de perguntas e tom. A geração de respostas e atas continua seguindo o provedor de IA configurado pelo usuário.
+
+Os timeouts podem ser ajustados com `EXTERNAL_QUESTION_TIMEOUT_MS` e `EXTERNAL_TONE_TIMEOUT_MS`.
+
+---
+
+## 4. Pipeline de Áudio & Processamento Local
 
 1. **Captura em Tempo Real**: O *Offscreen Document* da extensão Chrome utiliza `chrome.tabCapture` / `getUserMedia` para acessar o fluxo de áudio da aba da reunião.
 2. **AudioWorklet PCM 16kHz**: O áudio é convertido em tempo real para PCM 16kHz Mono.
@@ -71,7 +88,7 @@ O projeto utiliza **npm workspaces** com TypeScript fortemente tipado:
 
 ---
 
-## 4. Chrome Built-in AI (Gemini Nano On-Device)
+## 5. Chrome Built-in AI (Gemini Nano On-Device)
 
 O Vocalis AI tira proveito da aceleração de hardware local oferecida pelo navegador Chrome:
 
@@ -84,7 +101,7 @@ O Vocalis AI tira proveito da aceleração de hardware local oferecida pelo nave
 
 ---
 
-## 5. Arquitetura de Internacionalização (i18n)
+## 6. Arquitetura de Internacionalização (i18n)
 
 A extensão possui um motor de i18n nativo e fortemente tipado em `apps/chrome-extension/src/shared/i18n/`:
 
@@ -94,7 +111,7 @@ A extensão possui um motor de i18n nativo e fortemente tipado em `apps/chrome-e
 
 ---
 
-## 6. Provedores de IA Pluggáveis
+## 7. Provedores de IA Pluggáveis
 
 A interface `AnswerProvider` em `apps/orchestrator/src/services/answer-provider.ts` desacopla a regra de negócio do motor de IA:
 

@@ -288,6 +288,16 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'session.register', sessionId: tabSessionId, payload: {} }));
+      chrome.storage.local.get(['conversationAnalysisMode'], (stored) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({
+          type: 'settings.update',
+          sessionId: tabSessionId,
+          payload: {
+            conversationAnalysisMode: stored.conversationAnalysisMode === 'hybrid' ? 'hybrid' : 'local'
+          }
+        }));
+      });
     };
 
     ws.onmessage = (event) => {

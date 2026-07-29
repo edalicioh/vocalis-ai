@@ -121,7 +121,9 @@ export class GeminiProvider implements AnswerProvider {
         model: this.modelName,
         systemInstruction
       });
-      const result = await model.generateContentStream(input.prompt);
+      const result = await model.generateContentStream(input.prompt, {
+        signal: controller.signal
+      });
 
       let fullText = '';
 

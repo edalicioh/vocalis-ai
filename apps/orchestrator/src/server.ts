@@ -5,13 +5,13 @@ import dotenv from 'dotenv';
 import WebSocket from 'ws';
 
 import { ContextManager } from './services/context-manager.js';
-import { GeminiProvider } from './services/gemini.js';
 import { QuestionDetector } from './services/question-detector.js';
 import { WhisperClient } from './services/whisper-client.js';
 import { MeetingSummaryService } from './services/meeting-summary.js';
 import { AnswerProviderManager } from './services/provider-manager.js';
-import { AnswerProvider, AnswerEvent } from './services/answer-provider.js';
+import { AnswerProvider } from './services/answer-provider.js';
 import { ToneAnalyzer } from './services/tone-analyzer.js';
+import { ExternalConversationAnalyzer } from './services/external-conversation-analyzer.js';
 import {
   WSMessage,
   Settings,
@@ -19,7 +19,9 @@ import {
   ResponseMode,
   StatusUpdatePayload,
   QuestionMetrics,
-  AIProvider
+  AIProvider,
+  ConversationAnalysisMode,
+  QuestionDetectionResult
 } from '@conversation-copilot/shared-types';
 
 dotenv.config();
@@ -34,20 +36,43 @@ const defaultContextManager = new ContextManager();
 const sessionContexts = new Map<string, ContextManager>();
 const sessionActiveRequests = new Map<string, string>();
 const socketSessionMap = new Map<WebSocket, string>();
+const pendingQuestionValidations = new Map<string, {
+  candidateKey: string;
+  version: number;
+  controller: AbortController;
+}>();
+const pendingToneRefinements = new Map<string, {
+  version: number;
+  controller: AbortController;
+}>();
+const queuedQuestionValidations = new Map<string, QuestionDetectionResult>();
+const sessionUtteranceVersions = new Map<string, number>();
+const recentDetectedQuestions = new Map<string, { normalizedText: string; detectedAt: number }>();
+const activeCaptureSessions = new Set<string>();
 
 let activeAudioSessionId: string | null = null;
+let defaultConversationAnalysisMode: ConversationAnalysisMode = 'local';
 
 function getContextManager(sessionId?: string): ContextManager {
   if (!sessionId) return defaultContextManager;
   let cm = sessionContexts.get(sessionId);
   if (!cm) {
     cm = new ContextManager();
+    cm.setConversationAnalysisMode(defaultConversationAnalysisMode);
     sessionContexts.set(sessionId, cm);
   }
   return cm;
 }
 
 const providerManager = new AnswerProviderManager();
+const externalQuestionAnalyzer = new ExternalConversationAnalyzer(providerManager, {
+  timeoutMs: Number(process.env.EXTERNAL_QUESTION_TIMEOUT_MS) || 1_200,
+  utteranceWindowSize: 8
+});
+const externalToneAnalyzer = new ExternalConversationAnalyzer(providerManager, {
+  timeoutMs: Number(process.env.EXTERNAL_TONE_TIMEOUT_MS) || 5_000,
+  utteranceWindowSize: 8
+});
 if (process.env.GEMINI_API_KEY) {
   providerManager.geminiProvider.setApiKey(process.env.GEMINI_API_KEY);
 }
@@ -208,6 +233,15 @@ async function triggerLLMSuggestion(questionText: string, targetSessionId?: stri
       sessionId: targetSessionId,
       payload: { id: requestId, error: err.message }
     });
+  } finally {
+    if (sessionActiveRequests.get(sessionKey) === requestId) {
+      sessionActiveRequests.delete(sessionKey);
+      const queuedDetection = queuedQuestionValidations.get(sessionKey);
+      if (queuedDetection) {
+        queuedQuestionValidations.delete(sessionKey);
+        void validateAmbiguousQuestion(queuedDetection, targetSessionId);
+      }
+    }
   }
 }
 
@@ -253,30 +287,236 @@ async function triggerBackgroundSummary(targetSessionId?: string) {
 }
 
 // ============================================================
-// Análise de Tom via LLM (background, não-bloqueante)
+// Análise externa seletiva (background, não-bloqueante)
 // ============================================================
 
-async function triggerBackgroundToneAnalysis(targetSessionId?: string) {
-  (async () => {
-    try {
-      const cm = getContextManager(targetSessionId);
-      const recentUtterances = cm.getRecentUtterances();
-      if (recentUtterances.length < 3) return;
+function getSessionKey(targetSessionId?: string): string {
+  return targetSessionId || 'default';
+}
 
-      const llmResult = await ToneAnalyzer.analyzeWithLLM(cm, answerProvider);
-      if (llmResult) {
-        cm.updateTone(llmResult.tone, llmResult.confidence, llmResult.summary);
-        broadcastToSession(targetSessionId, {
-          type: 'conversation.tone.updated',
-          sessionId: targetSessionId,
-          payload: cm.getTonePayload()
-        });
-        server.log.info({ tone: llmResult.tone, confidence: llmResult.confidence }, 'Tom da conversa atualizado via LLM.');
-      }
+function normalizeQuestionText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isDuplicateQuestion(questionText: string, targetSessionId?: string): boolean {
+  const sessionKey = getSessionKey(targetSessionId);
+  const normalizedText = normalizeQuestionText(questionText);
+  const previous = recentDetectedQuestions.get(sessionKey);
+  if (!previous || Date.now() - previous.detectedAt > 5_000) {
+    return false;
+  }
+
+  return normalizedText === previous.normalizedText;
+}
+
+function publishDetectedQuestion(
+  detection: QuestionDetectionResult,
+  targetSessionId?: string
+): void {
+  if (isDuplicateQuestion(detection.questionText, targetSessionId)) {
+    server.log.info({ question: detection.questionText, targetSessionId }, 'Pergunta duplicada ignorada.');
+    return;
+  }
+
+  const sessionKey = getSessionKey(targetSessionId);
+  pendingQuestionValidations.get(sessionKey)?.controller.abort();
+  pendingQuestionValidations.delete(sessionKey);
+  queuedQuestionValidations.delete(sessionKey);
+  pendingToneRefinements.get(sessionKey)?.controller.abort();
+  pendingToneRefinements.delete(sessionKey);
+  recentDetectedQuestions.set(sessionKey, {
+    normalizedText: normalizeQuestionText(detection.questionText),
+    detectedAt: Date.now()
+  });
+
+  broadcastToSession(targetSessionId, {
+    type: 'question.detected',
+    sessionId: targetSessionId,
+    payload: detection
+  });
+
+  if (currentMetrics) {
+    currentMetrics.speechEnd = Date.now();
+  } else {
+    currentMetrics = { speechEnd: Date.now(), wasCancelled: false };
+  }
+
+  if (answerProvider.isConfigured()) {
+    void triggerLLMSuggestion(detection.questionText, targetSessionId);
+  }
+}
+
+async function validateAmbiguousQuestion(
+  detection: QuestionDetectionResult,
+  targetSessionId?: string
+): Promise<void> {
+  const cm = getContextManager(targetSessionId);
+  const sessionKey = getSessionKey(targetSessionId);
+  if (
+    cm.getConversationAnalysisMode() !== 'hybrid'
+    || !QuestionDetector.shouldValidateExternally(detection.score)
+    || !answerProvider.isConfigured()
+  ) {
+    return;
+  }
+
+  if (sessionActiveRequests.has(sessionKey)) {
+    queuedQuestionValidations.set(sessionKey, detection);
+    return;
+  }
+
+  const candidateKey = normalizeQuestionText(detection.questionText);
+  const version = sessionUtteranceVersions.get(sessionKey) || 0;
+  const controller = new AbortController();
+  const pendingValidation = { candidateKey, version, controller };
+  pendingQuestionValidations.get(sessionKey)?.controller.abort();
+  pendingToneRefinements.get(sessionKey)?.controller.abort();
+  pendingToneRefinements.delete(sessionKey);
+  pendingQuestionValidations.set(sessionKey, pendingValidation);
+
+  try {
+    const result = await externalQuestionAnalyzer.validateAmbiguousQuestion({
+      candidateText: detection.questionText,
+      accumulatedSummary: cm.getSummary().summaryText,
+      recentUtterances: cm.getRecentUtterances(),
+      meetingMode: cm.getMeetingMode()
+    }, controller.signal);
+
+    if (
+      pendingQuestionValidations.get(sessionKey) !== pendingValidation
+      || sessionUtteranceVersions.get(sessionKey) !== version
+      || cm.getConversationAnalysisMode() !== 'hybrid'
+      || !result?.isQuestion
+      || result.confidence < QuestionDetector.LOCAL_DETECTION_THRESHOLD
+    ) {
+      return;
+    }
+
+    publishDetectedQuestion({
+      isQuestion: true,
+      score: result.confidence,
+      reasons: [...detection.reasons, `validação externa: ${result.reason}`],
+      questionText: result.questionText || detection.questionText
+    }, targetSessionId);
+  } finally {
+    if (pendingQuestionValidations.get(sessionKey) === pendingValidation) {
+      pendingQuestionValidations.delete(sessionKey);
+    }
+  }
+}
+
+function triggerBackgroundToneRefinement(targetSessionId?: string): void {
+  const cm = getContextManager(targetSessionId);
+  const sessionKey = getSessionKey(targetSessionId);
+  if (
+    cm.getConversationAnalysisMode() !== 'hybrid'
+    || !cm.shouldRefineTone()
+    || cm.getRecentUtterances().length < 3
+    || sessionActiveRequests.has(sessionKey)
+    || pendingQuestionValidations.has(sessionKey)
+    || pendingToneRefinements.has(sessionKey)
+    || !answerProvider.isConfigured()
+  ) {
+    return;
+  }
+
+  const version = sessionUtteranceVersions.get(sessionKey) || 0;
+  const controller = new AbortController();
+  const pendingRefinement = { version, controller };
+  cm.markToneRefinementStarted();
+  pendingToneRefinements.set(sessionKey, pendingRefinement);
+  void (async () => {
+    try {
+      const result = await externalToneAnalyzer.refineTone({
+        accumulatedSummary: cm.getSummary().summaryText,
+        recentUtterances: cm.getRecentUtterances(),
+        meetingMode: cm.getMeetingMode()
+      }, controller.signal);
+      const currentVersion = sessionUtteranceVersions.get(sessionKey) || 0;
+      if (
+        !result
+        || pendingToneRefinements.get(sessionKey) !== pendingRefinement
+        || currentVersion !== version
+        || cm.getConversationAnalysisMode() !== 'hybrid'
+      ) return;
+
+      cm.updateTone(result.tone, result.confidence, result.summary);
+      broadcastToSession(targetSessionId, {
+        type: 'conversation.tone.updated',
+        sessionId: targetSessionId,
+        payload: cm.getTonePayload()
+      });
+      server.log.info(
+        { tone: result.tone, confidence: result.confidence, targetSessionId },
+        'Tom da conversa refinado externamente.'
+      );
     } catch (err: any) {
-      server.log.warn({ err }, 'Falha ao analisar tom via LLM (não-crítico).');
+      server.log.warn({ err }, 'Falha ao refinar o tom externamente (não-crítico).');
+    } finally {
+      if (pendingToneRefinements.get(sessionKey) === pendingRefinement) {
+        pendingToneRefinements.delete(sessionKey);
+      }
     }
   })();
+}
+
+function processUtterance(utterance: Utterance, targetSessionId?: string): void {
+  const resolvedSessionId = targetSessionId || activeAudioSessionId || activeSessionId || undefined;
+  server.log.info(
+    { text: utterance.text, isFinal: utterance.isFinal, targetSessionId: resolvedSessionId },
+    'Transcrição recebida do Whisper'
+  );
+
+  const cm = getContextManager(resolvedSessionId);
+  const accumulatedPartials = cm.getAccumulatedPartials();
+  cm.addUtterance(utterance.text, utterance.speaker, utterance.isFinal);
+
+  broadcastToSession(resolvedSessionId, {
+    type: utterance.isFinal ? 'transcript.final' : 'transcript.partial',
+    sessionId: resolvedSessionId,
+    payload: utterance
+  });
+
+  if (currentMetrics) {
+    currentMetrics.transcriptFinal = Date.now();
+  }
+
+  if (!utterance.isFinal) return;
+
+  const sessionKey = getSessionKey(resolvedSessionId);
+  const utteranceVersion = (sessionUtteranceVersions.get(sessionKey) || 0) + 1;
+  sessionUtteranceVersions.set(sessionKey, utteranceVersion);
+  pendingQuestionValidations.get(sessionKey)?.controller.abort();
+  pendingQuestionValidations.delete(sessionKey);
+  queuedQuestionValidations.delete(sessionKey);
+
+  // A transcrição final encerra a fala; o pipeline atual não fornece pausa pós-fala confiável.
+  const detection = QuestionDetector.detectWithContext(utterance.text, 0, true, {
+    recentUtterances: cm.getRecentUtterances(),
+    accumulatedPartials
+  });
+
+  if (detection.isQuestion) {
+    publishDetectedQuestion(detection, resolvedSessionId);
+  } else {
+    void validateAmbiguousQuestion(detection, resolvedSessionId);
+  }
+
+  const toneResult = ToneAnalyzer.analyzeHeuristic(cm.getRecentUtterances());
+  cm.updateTone(toneResult.tone, toneResult.confidence, toneResult.summary);
+  broadcastToSession(resolvedSessionId, {
+    type: 'conversation.tone.updated',
+    sessionId: resolvedSessionId,
+    payload: cm.getTonePayload()
+  });
+
+  triggerBackgroundToneRefinement(resolvedSessionId);
 }
 
 // ============================================================
@@ -290,62 +530,11 @@ async function startServer() {
   // Inicia conexão com o serviço de transcrição (services/whisper/)
   whisperClient.connect((utterance: Utterance) => {
     const targetSessionId = activeAudioSessionId || activeSessionId || undefined;
-    server.log.info({ text: utterance.text, isFinal: utterance.isFinal, targetSessionId }, 'Transcrição recebida do Whisper');
-
-    const cm = getContextManager(targetSessionId);
-    cm.addUtterance(utterance.text, utterance.speaker, utterance.isFinal);
-
-    // Notifica a extensão da aba correspondente com o evento
-    broadcastToSession(targetSessionId, {
-      type: utterance.isFinal ? 'transcript.final' : 'transcript.partial',
-      sessionId: targetSessionId,
-      payload: utterance
-    });
-
-    if (currentMetrics) {
-      currentMetrics.transcriptFinal = Date.now();
+    if (!targetSessionId) {
+      server.log.debug('Transcrição tardia ignorada porque não há sessão de áudio ativa.');
+      return;
     }
-
-    if (utterance.isFinal) {
-      // Detecção contextual: usa pausa real + histórico da conversa
-      const pauseMs = cm.getPauseSinceLastUtterance();
-      const detection = QuestionDetector.detectWithContext(utterance.text, pauseMs, true, {
-        recentUtterances: cm.getRecentUtterances(),
-        accumulatedPartials: cm.getAccumulatedPartials()
-      });
-
-      if (detection.isQuestion) {
-        broadcastToSession(targetSessionId, {
-          type: 'question.detected',
-          sessionId: targetSessionId,
-          payload: detection
-        });
-
-        if (currentMetrics) {
-          currentMetrics.speechEnd = Date.now();
-        } else {
-          currentMetrics = { speechEnd: Date.now(), wasCancelled: false };
-        }
-
-        if (answerProvider.isConfigured()) {
-          triggerLLMSuggestion(utterance.text, targetSessionId);
-        }
-      }
-
-      // Análise de tom: heurística rápida a cada fala final
-      const toneResult = ToneAnalyzer.analyzeHeuristic(cm.getRecentUtterances());
-      cm.updateTone(toneResult.tone, toneResult.confidence, toneResult.summary);
-      broadcastToSession(targetSessionId, {
-        type: 'conversation.tone.updated',
-        sessionId: targetSessionId,
-        payload: cm.getTonePayload()
-      });
-
-      // Análise de tom via LLM em background (a cada 8 falas)
-      if (cm.shouldAnalyzeTone()) {
-        triggerBackgroundToneAnalysis(targetSessionId);
-      }
-    }
+    processUtterance(utterance, targetSessionId);
   });
 
   // Health check
@@ -389,13 +578,15 @@ async function startServer() {
       socket.on('message', async (rawMsg: Buffer, isBinary: boolean) => {
         // Frames binários = blocos de áudio (RF-003)
         if (isBinary) {
+          const socketSession = socketSessionMap.get(socket);
+          if (!socketSession || !activeCaptureSessions.has(socketSession)) {
+            server.log.debug({ socketSession }, 'Frame de áudio ignorado porque a sessão não está ativa.');
+            return;
+          }
+
           receivedChunksCount++;
           totalAudioBytes += rawMsg.length;
-
-          const socketSession = socketSessionMap.get(socket);
-          if (socketSession) {
-            activeAudioSessionId = socketSession;
-          }
+          activeAudioSessionId = socketSession;
 
           if (receivedChunksCount % 50 === 0) {
             server.log.info({
@@ -434,6 +625,7 @@ async function startServer() {
               socketSessionMap.set(socket, targetSessionId);
               activeSessionId = targetSessionId;
               activeAudioSessionId = targetSessionId;
+              activeCaptureSessions.add(targetSessionId);
               receivedChunksCount = 0;
               totalAudioBytes = 0;
 
@@ -442,6 +634,9 @@ async function startServer() {
                 const cm = getContextManager(targetSessionId);
                 if (settings.meetingMode) {
                   cm.setMeetingMode(settings.meetingMode, settings.modeNotes);
+                }
+                if (settings.conversationAnalysisMode) {
+                  cm.setConversationAnalysisMode(settings.conversationAnalysisMode);
                 }
               }
 
@@ -460,9 +655,22 @@ async function startServer() {
                 await answerProvider.cancel(activeReq);
                 sessionActiveRequests.delete(sessionKey);
               }
+              pendingQuestionValidations.get(sessionKey)?.controller.abort();
+              pendingQuestionValidations.delete(sessionKey);
+              queuedQuestionValidations.delete(sessionKey);
+              pendingToneRefinements.get(sessionKey)?.controller.abort();
+              pendingToneRefinements.delete(sessionKey);
+              sessionUtteranceVersions.delete(sessionKey);
+              recentDetectedQuestions.delete(sessionKey);
+              if (targetSessionId) {
+                activeCaptureSessions.delete(targetSessionId);
+              }
 
               if (targetSessionId && activeSessionId === targetSessionId) {
                 activeSessionId = null;
+              }
+              if (targetSessionId && activeAudioSessionId === targetSessionId) {
+                activeAudioSessionId = null;
               }
               broadcastStatus(targetSessionId);
 
@@ -513,7 +721,13 @@ async function startServer() {
             case 'settings.update': {
               const targetSessionId = msg.sessionId || socketSessionMap.get(socket);
               const settings = msg.payload as Partial<Settings>;
-              server.log.info({ responseMode: settings.responseMode, aiProvider: settings.aiProvider, meetingMode: settings.meetingMode, targetSessionId }, '⚙️ [Configurações] Atualizadas');
+              server.log.info({
+                responseMode: settings.responseMode,
+                aiProvider: settings.aiProvider,
+                meetingMode: settings.meetingMode,
+                conversationAnalysisMode: settings.conversationAnalysisMode,
+                targetSessionId
+              }, '⚙️ [Configurações] Atualizadas');
 
               const cm = getContextManager(targetSessionId);
               if (settings.meetingMode) {
@@ -528,6 +742,36 @@ async function startServer() {
               }
               if (settings.responseMode) {
                 currentResponseMode = settings.responseMode;
+              }
+              if (settings.conversationAnalysisMode) {
+                if (targetSessionId) {
+                  cm.setConversationAnalysisMode(settings.conversationAnalysisMode);
+                  if (settings.conversationAnalysisMode === 'local') {
+                    const sessionKey = getSessionKey(targetSessionId);
+                    pendingQuestionValidations.get(sessionKey)?.controller.abort();
+                    pendingQuestionValidations.delete(sessionKey);
+                    queuedQuestionValidations.delete(sessionKey);
+                    pendingToneRefinements.get(sessionKey)?.controller.abort();
+                    pendingToneRefinements.delete(sessionKey);
+                  }
+                } else {
+                  defaultConversationAnalysisMode = settings.conversationAnalysisMode;
+                  defaultContextManager.setConversationAnalysisMode(settings.conversationAnalysisMode);
+                  for (const sessionContext of sessionContexts.values()) {
+                    sessionContext.setConversationAnalysisMode(settings.conversationAnalysisMode);
+                  }
+                  if (settings.conversationAnalysisMode === 'local') {
+                    for (const pending of pendingQuestionValidations.values()) {
+                      pending.controller.abort();
+                    }
+                    pendingQuestionValidations.clear();
+                    queuedQuestionValidations.clear();
+                    for (const pending of pendingToneRefinements.values()) {
+                      pending.controller.abort();
+                    }
+                    pendingToneRefinements.clear();
+                  }
+                }
               }
 
               broadcastStatus(targetSessionId);
@@ -562,9 +806,8 @@ async function startServer() {
   }
 }
 
-export { server, startServer };
+export { processUtterance, server, startServer };
 
 if (process.env.NODE_ENV !== 'test') {
   startServer();
 }
-

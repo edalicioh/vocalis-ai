@@ -113,12 +113,15 @@ export type PanelMode = 'compact' | 'normal' | 'keywords-only' | 'transcription-
 
 export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama' | 'custom_proxy';
 export type UiLanguage = 'pt-BR' | 'en';
+export type ConversationAnalysisMode = 'local' | 'hybrid';
 
 export interface Settings {
   /** Provedor de IA ativo */
   aiProvider?: AIProvider;
   /** Modo de reunião ativo (padrão: technical_interview) */
   meetingMode?: MeetingMode;
+  /** Modo de análise da conversa (padrão: local) */
+  conversationAnalysisMode?: ConversationAnalysisMode;
   /** Notas de apoio customizadas por modo */
   modeNotes?: Partial<Record<MeetingMode, string>>;
   /** Chave da API (armazenada no backend — RNF-004) */
