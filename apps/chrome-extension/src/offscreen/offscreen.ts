@@ -1,4 +1,9 @@
-let ws: WebSocket | null = null;
+import type { AudioSource, SessionRegisterPayload, WSMessage } from '@conversation-copilot/shared-types';
+
+const audioSockets: Record<AudioSource, WebSocket | null> = {
+  tab: null,
+  microphone: null
+};
 let audioContext: AudioContext | null = null;
 let tabStream: MediaStream | null = null;
 let micStream: MediaStream | null = null;
@@ -8,41 +13,63 @@ let audioWorkletNode: AudioWorkletNode | null = null;
 let sentAudioChunks = 0;
 
 let activeSessionId: string | null = null;
+const vadState: Record<AudioSource, { isAudioActive: boolean; rms: number }> = {
+  tab: { isAudioActive: false, rms: 0 },
+  microphone: { isAudioActive: false, rms: 0 }
+};
 
-function connectWebSocket() {
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+function registerAudioSocket(ws: WebSocket, source: AudioSource) {
+  if (!activeSessionId) return;
+
+  const message: WSMessage<SessionRegisterPayload> = {
+    type: 'session.register',
+    sessionId: activeSessionId,
+    payload: { audioSource: source }
+  };
+  ws.send(JSON.stringify(message));
+}
+
+function connectWebSocket(source: AudioSource) {
+  const currentSocket = audioSockets[source];
+  if (currentSocket && (currentSocket.readyState === WebSocket.OPEN || currentSocket.readyState === WebSocket.CONNECTING)) {
     return;
   }
 
   const wsUrl = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
-  ws = new WebSocket(wsUrl);
+  const ws = new WebSocket(wsUrl);
+  audioSockets[source] = ws;
   ws.binaryType = 'arraybuffer';
 
-  ws.onopen = async () => {
-    console.log('[Offscreen] Conectado ao Orquestrador WebSocket.');
-    if (activeSessionId) {
-      ws?.send(JSON.stringify({ type: 'session.register', sessionId: activeSessionId, payload: {} }));
-    }
+  ws.onopen = () => {
+    console.log(`[Offscreen] Canal de áudio ${source} conectado ao Orquestrador.`);
+    registerAudioSocket(ws, source);
   };
 
   ws.onclose = () => {
-    console.log('[Offscreen] WebSocket fechado. Tentando reconectar...');
-    setTimeout(connectWebSocket, 3000);
+    if (audioSockets[source] === ws) {
+      audioSockets[source] = null;
+    }
+    console.log(`[Offscreen] Canal de áudio ${source} fechado. Tentando reconectar...`);
+    setTimeout(() => connectWebSocket(source), 3000);
   };
 
   ws.onerror = (err) => {
-    console.error('[Offscreen] Erro de WebSocket:', err);
+    console.error(`[Offscreen] Erro no canal de áudio ${source}:`, err);
   };
 }
 
-connectWebSocket();
+connectWebSocket('tab');
+connectWebSocket('microphone');
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'INIT_AUDIO_CAPTURE' && message.streamId) {
     if (message.sessionId) {
       activeSessionId = message.sessionId;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'session.register', sessionId: activeSessionId, payload: {} }));
+      for (const source of ['tab', 'microphone'] as const) {
+        const ws = audioSockets[source];
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          registerAudioSocket(ws, source);
+        }
       }
     }
     startCapture(message.streamId, message.rmsThreshold);
@@ -93,7 +120,7 @@ async function startCapture(streamId: string, initialRmsThreshold?: number) {
 
     await audioContext.audioWorklet.addModule(chrome.runtime.getURL('pcm-worklet.js'));
     audioWorkletNode = new AudioWorkletNode(audioContext, 'pcm-capture-processor', {
-      numberOfInputs: 1,
+      numberOfInputs: 2,
       numberOfOutputs: 1,
       outputChannelCount: [1],
       channelCount: 1,
@@ -108,21 +135,29 @@ async function startCapture(streamId: string, initialRmsThreshold?: number) {
       if (!event.data) return;
 
       if (event.data.type === 'VAD_STATE') {
-        chrome.runtime.sendMessage({
-          type: 'AUDIO_VAD_STATE',
+        const source = event.data.source as AudioSource;
+        vadState[source] = {
           isAudioActive: event.data.isAudioActive,
           rms: event.data.rms
+        };
+        const isAudioActive = vadState.tab.isAudioActive || vadState.microphone.isAudioActive;
+        chrome.runtime.sendMessage({
+          type: 'AUDIO_VAD_STATE',
+          isAudioActive,
+          rms: Math.max(vadState.tab.rms, vadState.microphone.rms)
         }).catch(() => {});
         return;
       }
 
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (event.data.type === 'AUDIO_CHUNK' && event.data.chunk instanceof ArrayBuffer) {
+        const source = event.data.source as AudioSource;
+        const ws = audioSockets[source];
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
-      if (event.data instanceof ArrayBuffer) {
-        ws.send(event.data);
+        ws.send(event.data.chunk);
         sentAudioChunks++;
         if (sentAudioChunks === 1) {
-          console.log(`[Offscreen] Primeiro bloco PCM enviado (${event.data.byteLength} bytes).`);
+          console.log(`[Offscreen] Primeiro bloco PCM enviado (${source}, ${event.data.chunk.byteLength} bytes).`);
         }
       }
     };
@@ -131,12 +166,12 @@ async function startCapture(streamId: string, initialRmsThreshold?: number) {
 
     // 4. Conectar áudio da aba
     tabSourceNode = audioContext.createMediaStreamSource(tabStream);
-    tabSourceNode.connect(audioWorkletNode);
+    tabSourceNode.connect(audioWorkletNode, 0, 0);
 
-    // 5. Conectar áudio do microfone ao mesmo processador (mixagem)
+    // 5. Conectar o microfone à entrada isolada do processador.
     if (micStream) {
       micSourceNode = audioContext.createMediaStreamSource(micStream);
-      micSourceNode.connect(audioWorkletNode);
+      micSourceNode.connect(audioWorkletNode, 0, 1);
     }
 
     audioWorkletNode.connect(audioContext.destination);
@@ -149,6 +184,8 @@ async function startCapture(streamId: string, initialRmsThreshold?: number) {
 }
 
 function stopCapture(log = true) {
+  vadState.tab = { isAudioActive: false, rms: 0 };
+  vadState.microphone = { isAudioActive: false, rms: 0 };
   if (audioWorkletNode) {
     audioWorkletNode.port.onmessage = null;
     audioWorkletNode.port.close();

@@ -93,6 +93,15 @@ describe('ContextManager', () => {
     expect(cm.getAccumulatedPartials()).toBe('');
   });
 
+  it('deve manter buffers de parciais separados por locutor', () => {
+    cm.addUtterance('como você faria', 'interviewer', false);
+    cm.addUtterance('eu começaria pelo domínio', 'candidate', false);
+    cm.addUtterance('Esta é minha resposta.', 'candidate', true);
+
+    expect(cm.getAccumulatedPartials('interviewer')).toBe('como você faria');
+    expect(cm.getAccumulatedPartials('candidate')).toBe('');
+  });
+
   it('deve limitar o buffer de parciais a 5 entradas', () => {
     for (let i = 1; i <= 8; i++) {
       cm.addUtterance(`parcial ${i}`, 'interviewer', false);

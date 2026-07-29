@@ -22,7 +22,7 @@ export class MeetingSummaryService {
     }
 
     const fullDialogue = recentUtterances
-      .map(u => `[${u.speaker === 'interviewer' ? 'ENTREVISTADOR/REUNIÃO' : 'FALA'}]: ${u.text}`)
+      .map(u => `[${u.speaker === 'interviewer' ? 'ENTREVISTADOR/REUNIÃO' : u.speaker === 'candidate' ? 'VOCÊ' : 'FALA'}]: ${u.text}`)
       .join('\n');
 
     const prompt = `
@@ -79,7 +79,9 @@ ${fullDialogue}
   private static buildFallbackSummary(cm: ContextManager): string {
     const recentUtterances = cm.getRecentUtterances();
     const fullDialogue = recentUtterances.length > 0
-      ? recentUtterances.map(u => `[${u.speaker}]: ${u.text}`).join('\n')
+      ? recentUtterances
+        .map(u => `[${u.speaker === 'interviewer' ? 'ENTREVISTADOR/REUNIÃO' : u.speaker === 'candidate' ? 'VOCÊ' : 'FALA'}]: ${u.text}`)
+        .join('\n')
       : 'Nenhuma fala registrada.';
 
     return `

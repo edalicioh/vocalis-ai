@@ -38,7 +38,7 @@ describe('WhisperClient', () => {
     const { server, port: testPort } = await createTestServer();
     wss = server;
 
-    client = new WhisperClient(`ws://localhost:${testPort}`);
+    client = new WhisperClient(`ws://localhost:${testPort}`, 'interviewer');
     expect(client.getIsConnected()).toBe(false);
 
     let connectedOnServer = false;
@@ -60,7 +60,7 @@ describe('WhisperClient', () => {
     wss = server;
 
     const receivedUtterances: Utterance[] = [];
-    client = new WhisperClient(`ws://localhost:${testPort}`);
+    client = new WhisperClient(`ws://localhost:${testPort}`, 'interviewer');
 
     wss.on('connection', (ws) => {
       // Envia evento de transcrição final quando o cliente conecta
@@ -92,6 +92,29 @@ describe('WhisperClient', () => {
     expect(utt.confidence).toBe(0.98);
     expect(utt.language).toBe('pt');
     expect(utt.speaker).toBe('interviewer');
+  });
+
+  it('deve identificar transcrições do canal do microfone como candidato', async () => {
+    const { server, port: testPort } = await createTestServer();
+    wss = server;
+
+    const receivedUtterances: Utterance[] = [];
+    client = new WhisperClient(`ws://localhost:${testPort}`, 'candidate');
+
+    wss.on('connection', (ws) => {
+      ws.send(JSON.stringify({
+        type: 'transcript.final',
+        payload: { text: 'Esta é a minha resposta', confidence: 0.9 }
+      }));
+    });
+
+    client.connect(utterance => receivedUtterances.push(utterance));
+
+    await vi.waitFor(() => {
+      expect(receivedUtterances).toHaveLength(1);
+    });
+
+    expect(receivedUtterances[0].speaker).toBe('candidate');
   });
 
   it('deve normalizar eventos legados como TRANSCRIPTION_DELTA para transcript.final', async () => {
@@ -153,6 +176,39 @@ describe('WhisperClient', () => {
       expect(receivedBuffer).not.toBeNull();
       expect(receivedBuffer).toEqual(sampleChunk);
     });
+  });
+
+  it('deve descartar transcrições antigas até a confirmação do reset', async () => {
+    const { server, port: testPort } = await createTestServer();
+    wss = server;
+
+    const receivedUtterances: Utterance[] = [];
+    wss.on('connection', (ws) => {
+      ws.on('message', (data, isBinary) => {
+        if (isBinary) return;
+        const message = JSON.parse(data.toString());
+        if (message.type === 'RESET') {
+          ws.send(JSON.stringify({
+            type: 'transcript.final',
+            payload: { text: 'Transcrição da sessão anterior' }
+          }));
+          ws.send(JSON.stringify({ type: 'RESET_ACK' }));
+          ws.send(JSON.stringify({
+            type: 'transcript.final',
+            payload: { text: 'Transcrição da sessão atual' }
+          }));
+        }
+      });
+    });
+
+    client = new WhisperClient(`ws://localhost:${testPort}`, 'interviewer');
+    client.connect(utterance => receivedUtterances.push(utterance));
+
+    await vi.waitFor(() => expect(client?.getIsConnected()).toBe(true));
+    client.reset();
+
+    await vi.waitFor(() => expect(receivedUtterances).toHaveLength(1));
+    expect(receivedUtterances[0].text).toBe('Transcrição da sessão atual');
   });
 
   it('deve tentar reconectar automaticamente após desconexão não intencional', async () => {

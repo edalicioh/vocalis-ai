@@ -35,6 +35,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   const [customProxyApiKey, setCustomProxyApiKey] = useState('');
   const [customProxyModel, setCustomProxyModel] = useState('deepseek-chat');
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>('pt-BR');
+  const [realtimeTranslation, setRealtimeTranslation] = useState(true);
+  const [targetTranslationLanguage, setTargetTranslationLanguage] = useState('pt-BR');
 
   // Modelos carregados dinamicamente via API
   const [dynamicModels, setDynamicModels] = useState<Record<AIProvider, ModelOption[]>>({
@@ -162,6 +164,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       if (res.jobTechnologies) setJobTechnologies(res.jobTechnologies);
       if (res.jobNotes) setJobNotes(res.jobNotes);
       if (res.uiLanguage) setUiLanguage(res.uiLanguage);
+      if (res.realtimeTranslation !== undefined) setRealtimeTranslation(res.realtimeTranslation);
+      if (res.targetTranslationLanguage) setTargetTranslationLanguage(res.targetTranslationLanguage);
       if (res.responseMode) setResponseMode(res.responseMode);
       if (res.ttsMode) setTtsMode(res.ttsMode);
       if (res.ttsSpeed) setTtsSpeed(res.ttsSpeed);
@@ -219,7 +223,9 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       autoTrigger: true,
       userProfile,
       jobDescription: job,
-      uiLanguage
+      uiLanguage,
+      realtimeTranslation,
+      targetTranslationLanguage
     };
   };
 
@@ -238,7 +244,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       name, role, seniority, skills, experiences, projects,
       strengths, weaknesses, jobTitle, jobCompany, jobDescription,
       jobRequirements, jobNiceToHave, jobTechnologies, jobNotes,
-      responseMode, ttsMode, ttsSpeed, ttsVolume, uiLanguage
+      responseMode, ttsMode, ttsSpeed, ttsVolume, uiLanguage,
+      realtimeTranslation, targetTranslationLanguage
     }, () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -290,6 +297,38 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
                 <option value="en">🇺🇸 English</option>
               </select>
             </div>
+
+            <div style={fieldGroupStyle}>
+              <label style={labelStyle}>🗣️ {t('settings.realtimeTranslation', uiLanguage)}</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <input
+                  type="checkbox"
+                  checked={realtimeTranslation}
+                  onChange={e => setRealtimeTranslation(e.target.checked)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '13px', color: '#d1d5db' }}>
+                  {realtimeTranslation ? 'Ativada (traduzir falas em tempo real)' : 'Desativada'}
+                </span>
+              </div>
+            </div>
+
+            {realtimeTranslation && (
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>🎯 {t('settings.targetTranslationLanguage', uiLanguage)}</label>
+                <select
+                  value={targetTranslationLanguage}
+                  onChange={e => setTargetTranslationLanguage(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="pt-BR">🇧🇷 Português (Brasil)</option>
+                  <option value="en">🇺🇸 English</option>
+                  <option value="es">🇪🇸 Español</option>
+                  <option value="fr">🇫🇷 Français</option>
+                  <option value="de">🇩🇪 Deutsch</option>
+                </select>
+              </div>
+            )}
 
             <div style={fieldGroupStyle}>
               <label style={labelStyle}>{t('settings.provider', uiLanguage)}</label>

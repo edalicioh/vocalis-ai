@@ -20,8 +20,10 @@ import {
   StatusUpdatePayload,
   QuestionMetrics,
   AIProvider,
+  AudioSource,
   ConversationAnalysisMode,
-  QuestionDetectionResult
+  QuestionDetectionResult,
+  SessionRegisterPayload
 } from '@conversation-copilot/shared-types';
 
 dotenv.config();
@@ -36,6 +38,7 @@ const defaultContextManager = new ContextManager();
 const sessionContexts = new Map<string, ContextManager>();
 const sessionActiveRequests = new Map<string, string>();
 const socketSessionMap = new Map<WebSocket, string>();
+const socketAudioSourceMap = new Map<WebSocket, AudioSource>();
 const pendingQuestionValidations = new Map<string, {
   candidateKey: string;
   version: number;
@@ -76,9 +79,41 @@ const externalToneAnalyzer = new ExternalConversationAnalyzer(providerManager, {
 if (process.env.GEMINI_API_KEY) {
   providerManager.geminiProvider.setApiKey(process.env.GEMINI_API_KEY);
 }
-const whisperClient = new WhisperClient(
-  process.env.WHISPER_WS_URL || 'ws://localhost:8000/ws/transcribe'
-);
+const whisperUrl = process.env.WHISPER_WS_URL || 'ws://localhost:8000/ws/transcribe';
+const whisperClients = new Map<string, WhisperClient>();
+
+function getWhisperClientKey(sessionId: string, source: AudioSource): string {
+  return `${sessionId}:${source}`;
+}
+
+function getWhisperClient(sessionId: string, source: AudioSource): WhisperClient {
+  const key = getWhisperClientKey(sessionId, source);
+  const existingClient = whisperClients.get(key);
+  if (existingClient) return existingClient;
+
+  const client = new WhisperClient(
+    whisperUrl,
+    source === 'tab' ? 'interviewer' : 'candidate'
+  );
+  whisperClients.set(key, client);
+  client.connect((utterance: Utterance) => {
+    if (!activeCaptureSessions.has(sessionId) || whisperClients.get(key) !== client) {
+      server.log.debug({ sessionId, source }, 'Transcrição tardia ignorada porque a sessão de áudio não está ativa.');
+      return;
+    }
+    processUtterance(utterance, sessionId);
+  });
+  return client;
+}
+
+function isWhisperConnected(sessionId?: string): boolean {
+  const clients = sessionId
+    ? (['tab', 'microphone'] as const)
+      .map(source => whisperClients.get(getWhisperClientKey(sessionId, source)))
+      .filter((client): client is WhisperClient => Boolean(client))
+    : [...whisperClients.values()];
+  return clients.length > 0 && clients.every(client => client.getIsConnected());
+}
 
 // AnswerProvider substituível (RNF-006)
 let answerProvider: AnswerProvider = providerManager;
@@ -121,7 +156,7 @@ function broadcastStatus(targetSessionId?: string) {
     type: 'status.update',
     sessionId: targetSessionId,
     payload: {
-      whisperConnected: whisperClient.getIsConnected(),
+      whisperConnected: isWhisperConnected(targetSessionId),
       llmConfigured: answerProvider.isConfigured(),
       isCapturing: targetSessionId ? (activeSessionId === targetSessionId) : false,
       activeSessionId: targetSessionId || activeSessionId || undefined,
@@ -474,7 +509,7 @@ function processUtterance(utterance: Utterance, targetSessionId?: string): void 
   );
 
   const cm = getContextManager(resolvedSessionId);
-  const accumulatedPartials = cm.getAccumulatedPartials();
+  const accumulatedPartials = cm.getAccumulatedPartials(utterance.speaker);
   cm.addUtterance(utterance.text, utterance.speaker, utterance.isFinal);
 
   broadcastToSession(resolvedSessionId, {
@@ -497,15 +532,17 @@ function processUtterance(utterance: Utterance, targetSessionId?: string): void 
   queuedQuestionValidations.delete(sessionKey);
 
   // A transcrição final encerra a fala; o pipeline atual não fornece pausa pós-fala confiável.
-  const detection = QuestionDetector.detectWithContext(utterance.text, 0, true, {
-    recentUtterances: cm.getRecentUtterances(),
-    accumulatedPartials
-  });
+  if (utterance.speaker === 'interviewer') {
+    const detection = QuestionDetector.detectWithContext(utterance.text, 0, true, {
+      recentUtterances: cm.getRecentUtterances(),
+      accumulatedPartials
+    });
 
-  if (detection.isQuestion) {
-    publishDetectedQuestion(detection, resolvedSessionId);
-  } else {
-    void validateAmbiguousQuestion(detection, resolvedSessionId);
+    if (detection.isQuestion) {
+      publishDetectedQuestion(detection, resolvedSessionId);
+    } else {
+      void validateAmbiguousQuestion(detection, resolvedSessionId);
+    }
   }
 
   const toneResult = ToneAnalyzer.analyzeHeuristic(cm.getRecentUtterances());
@@ -527,21 +564,11 @@ async function startServer() {
   await server.register(fastifyCors, { origin: '*' });
   await server.register(fastifyWebsocket);
 
-  // Inicia conexão com o serviço de transcrição (services/whisper/)
-  whisperClient.connect((utterance: Utterance) => {
-    const targetSessionId = activeAudioSessionId || activeSessionId || undefined;
-    if (!targetSessionId) {
-      server.log.debug('Transcrição tardia ignorada porque não há sessão de áudio ativa.');
-      return;
-    }
-    processUtterance(utterance, targetSessionId);
-  });
-
   // Health check
   server.get('/health', async () => {
     return {
       status: 'ok',
-      whisperConnected: whisperClient.getIsConnected(),
+      whisperConnected: isWhisperConnected(),
       llmConfigured: answerProvider.isConfigured(),
       activeSession: activeSessionId,
       activeSessionsCount: sessionContexts.size,
@@ -579,20 +606,27 @@ async function startServer() {
         // Frames binários = blocos de áudio (RF-003)
         if (isBinary) {
           const socketSession = socketSessionMap.get(socket);
+          const audioSource = socketAudioSourceMap.get(socket);
           if (!socketSession || !activeCaptureSessions.has(socketSession)) {
             server.log.debug({ socketSession }, 'Frame de áudio ignorado porque a sessão não está ativa.');
+            return;
+          }
+          if (!audioSource) {
+            server.log.debug({ socketSession }, 'Frame de áudio ignorado porque a origem não foi registrada.');
             return;
           }
 
           receivedChunksCount++;
           totalAudioBytes += rawMsg.length;
           activeAudioSessionId = socketSession;
+          const whisperClient = getWhisperClient(socketSession, audioSource);
 
           if (receivedChunksCount % 50 === 0) {
             server.log.info({
               chunksReceived: receivedChunksCount,
               totalAudioBytes,
               socketSession,
+              audioSource,
               whisperConnected: whisperClient.getIsConnected()
             }, '🎙️ [Áudio] Recebendo fluxo de áudio PCM da extensão...');
           }
@@ -614,6 +648,10 @@ async function startServer() {
               const targetSessionId = msg.sessionId;
               if (targetSessionId) {
                 socketSessionMap.set(socket, targetSessionId);
+                const { audioSource } = (msg.payload || {}) as SessionRegisterPayload;
+                if (audioSource === 'tab' || audioSource === 'microphone') {
+                  socketAudioSourceMap.set(socket, audioSource);
+                }
                 server.log.info({ sessionId: targetSessionId }, '📋 [Sessão] Conexão associada à sessão da aba.');
               }
               broadcastStatus(targetSessionId);
@@ -626,6 +664,9 @@ async function startServer() {
               activeSessionId = targetSessionId;
               activeAudioSessionId = targetSessionId;
               activeCaptureSessions.add(targetSessionId);
+              for (const source of ['tab', 'microphone'] as const) {
+                getWhisperClient(targetSessionId, source).reset();
+              }
               receivedChunksCount = 0;
               totalAudioBytes = 0;
 
@@ -671,6 +712,13 @@ async function startServer() {
               }
               if (targetSessionId && activeAudioSessionId === targetSessionId) {
                 activeAudioSessionId = null;
+              }
+              if (targetSessionId) {
+                for (const source of ['tab', 'microphone'] as const) {
+                  const key = getWhisperClientKey(targetSessionId, source);
+                  whisperClients.get(key)?.disconnect();
+                  whisperClients.delete(key);
+                }
               }
               broadcastStatus(targetSessionId);
 
@@ -785,6 +833,7 @@ async function startServer() {
 
       socket.on('close', () => {
         socketSessionMap.delete(socket);
+        socketAudioSourceMap.delete(socket);
         activeConnections.delete(socket);
         server.log.info('Extensão desconectada.');
       });

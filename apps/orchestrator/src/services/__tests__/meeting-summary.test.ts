@@ -26,6 +26,8 @@ describe('MeetingSummaryService', () => {
     expect(summary).toContain('## 🤝 Decisões Tomadas');
     expect(summary).toContain('## ✅ Action Items (Tarefas & Próximos Passos)');
     expect(summary).toContain('## 💬 Transcrição Completa');
+    expect(summary).toContain('[ENTREVISTADOR/REUNIÃO]: Quais são suas experiências com TypeScript?');
+    expect(summary).toContain('[VOCÊ]: Tenho 5 anos de experiência com TypeScript e Node.js.');
     expect(summary).toContain('Quais são suas experiências com TypeScript?');
   });
 });
