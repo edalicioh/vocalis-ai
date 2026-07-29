@@ -109,8 +109,12 @@ export class ContextManager {
 
   // ========= Buffer de transcrições parciais =========
 
-  /** Texto acumulado de transcrições parciais recentes */
-  private partialBuffer: string[] = [];
+  /** Textos parciais recentes, isolados por locutor. */
+  private partialBuffers: Record<Utterance['speaker'], string[]> = {
+    interviewer: [],
+    candidate: [],
+    unknown: []
+  };
   private readonly MAX_PARTIAL_BUFFER = 5;
 
   // ========= Rastreamento de pausa =========
@@ -155,6 +159,7 @@ export class ContextManager {
       timestamp: Date.now(),
       isFinal
     };
+    const partialBuffer = this.partialBuffers[speaker];
 
     if (isFinal) {
       this.utterances.push(utterance);
@@ -164,19 +169,19 @@ export class ContextManager {
       this.finalUtterancesSinceLastSummary++;
       this.finalUtterancesSinceLastToneRefinement++;
       this.lastFinalUtteranceTimestamp = utterance.timestamp;
-      this.partialBuffer = [];
+      this.partialBuffers[speaker] = [];
     } else {
-      const accumulated = this.getAccumulatedPartials();
+      const accumulated = this.getAccumulatedPartials(speaker);
       const normalizedAccumulated = accumulated.toLocaleLowerCase('pt-BR');
       const normalizedText = text.trim().toLocaleLowerCase('pt-BR');
 
       if (normalizedText.startsWith(normalizedAccumulated) && accumulated) {
-        this.partialBuffer = [text.trim()];
+        this.partialBuffers[speaker] = [text.trim()];
       } else if (!normalizedAccumulated.includes(normalizedText)) {
-        this.partialBuffer.push(text.trim());
+        partialBuffer.push(text.trim());
       }
-      if (this.partialBuffer.length > this.MAX_PARTIAL_BUFFER) {
-        this.partialBuffer.shift();
+      if (this.partialBuffers[speaker].length > this.MAX_PARTIAL_BUFFER) {
+        this.partialBuffers[speaker].shift();
       }
     }
 
@@ -193,8 +198,8 @@ export class ContextManager {
    * Retorna o texto acumulado das transcrições parciais anteriores.
    * Usado pelo QuestionDetector para montar perguntas fragmentadas.
    */
-  public getAccumulatedPartials(): string {
-    return this.partialBuffer.join(' ').trim();
+  public getAccumulatedPartials(speaker: Utterance['speaker'] = 'interviewer'): string {
+    return this.partialBuffers[speaker].join(' ').trim();
   }
 
   // ========= Rastreamento de pausa =========

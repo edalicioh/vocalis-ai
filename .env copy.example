@@ -30,3 +30,5 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 WHISPER_MODEL=small
 # Compute type: float16 (GPU), int8 (CPU), float32 (CPU lento)
 WHISPER_COMPUTE=float16
+# Idioma da transcrição: auto (auto-detecção em tempo real), pt, en, es, etc.
+WHISPER_LANGUAGE=auto

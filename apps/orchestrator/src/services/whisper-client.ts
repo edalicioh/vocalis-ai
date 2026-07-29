@@ -23,8 +23,14 @@ export class WhisperClient {
   private onTranscriptionCallback: TranscriptionCallback | null = null;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect: boolean = true;
+  private pendingResetAcks: number = 0;
+  private pendingAudioChunks: Buffer[] = [];
+  private readonly maxPendingAudioChunks = 50;
 
-  constructor(private url: string = process.env.WHISPER_WS_URL || 'ws://localhost:8000/ws/transcribe') {}
+  constructor(
+    private url: string = process.env.WHISPER_WS_URL || 'ws://localhost:8000/ws/transcribe',
+    private speaker: Utterance['speaker'] = 'unknown'
+  ) {}
 
   public connect(onTranscription: TranscriptionCallback) {
     this.onTranscriptionCallback = onTranscription;
@@ -38,12 +44,25 @@ export class WhisperClient {
 
       this.ws.on('open', () => {
         this.isConnected = true;
+        this.pendingResetAcks = 0;
         console.log('[WhisperClient] Conectado ao serviço de transcrição (services/whisper/).');
+        for (const chunk of this.pendingAudioChunks) {
+          this.ws?.send(chunk);
+        }
+        this.pendingAudioChunks = [];
       });
 
       this.ws.on('message', (data: WebSocket.Data) => {
         try {
           const message = JSON.parse(data.toString());
+
+          if (message.type === 'RESET_ACK') {
+            this.pendingResetAcks = Math.max(0, this.pendingResetAcks - 1);
+            return;
+          }
+
+          // Descarta resultados do buffer anterior até o serviço confirmar o reset.
+          if (this.pendingResetAcks > 0) return;
 
           // Padroniza eventos do Whisper para dot.notation
           const type = this.normalizeEventType(message.type);
@@ -51,12 +70,13 @@ export class WhisperClient {
           if ((type === 'transcript.partial' || type === 'transcript.final') && message.payload?.text) {
             const utterance: Utterance = {
               id: Math.random().toString(36).substring(2, 9),
-              speaker: 'interviewer',
+              speaker: this.speaker,
               text: message.payload.text,
               timestamp: Date.now(),
               isFinal: type === 'transcript.final',
               confidence: message.payload.probability ?? message.payload.confidence,
               language: message.payload.language,
+              translatedText: message.payload.translatedText,
               start: message.payload.start,
               end: message.payload.end
             };
@@ -114,6 +134,18 @@ export class WhisperClient {
   public sendAudioChunk(chunk: Buffer) {
     if (this.ws && this.isConnected && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(chunk);
+    } else if (this.shouldReconnect) {
+      this.pendingAudioChunks.push(chunk);
+      if (this.pendingAudioChunks.length > this.maxPendingAudioChunks) {
+        this.pendingAudioChunks.shift();
+      }
+    }
+  }
+
+  public reset() {
+    if (this.ws && this.isConnected && this.ws.readyState === WebSocket.OPEN) {
+      this.pendingResetAcks++;
+      this.ws.send(JSON.stringify({ type: 'RESET' }));
     }
   }
 
@@ -136,5 +168,6 @@ export class WhisperClient {
       this.ws = null;
     }
     this.isConnected = false;
+    this.pendingAudioChunks = [];
   }
 }

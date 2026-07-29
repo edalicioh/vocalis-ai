@@ -143,7 +143,7 @@ describe('Orchestrator Fastify Server & WebSocket Interface', () => {
         if (msg.type === 'status.update') {
           processUtterance({
             id: 'partial-1',
-            speaker: 'unknown',
+            speaker: 'interviewer',
             text: 'como você faria',
             timestamp: Date.now(),
             isFinal: false
@@ -151,7 +151,7 @@ describe('Orchestrator Fastify Server & WebSocket Interface', () => {
 
           const finalUtterance = {
             id: 'final-1',
-            speaker: 'unknown' as const,
+            speaker: 'interviewer' as const,
             text: 'como você faria o cache distribuído?',
             timestamp: Date.now(),
             isFinal: true
@@ -177,5 +177,44 @@ describe('Orchestrator Fastify Server & WebSocket Interface', () => {
     expect((detectedQuestions[0].payload as QuestionDetectionResult).questionText)
       .toBe('como você faria o cache distribuído?');
     expect(receivedMessages.some(message => message.type === 'conversation.tone.updated')).toBe(true);
+  });
+
+  it('não deve detectar como pergunta uma fala do candidato', async () => {
+    const sessionId = 'test-session-candidate';
+    const wsUrl = serverAddress.replace('http://', 'ws://') + '/ws';
+    const ws = new WebSocket(wsUrl);
+    const receivedMessages: WSMessage[] = [];
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ type: 'session.register', sessionId }));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString()) as WSMessage;
+        receivedMessages.push(msg);
+
+        if (msg.type === 'status.update') {
+          processUtterance({
+            id: 'candidate-question',
+            speaker: 'candidate',
+            text: 'Posso explicar como implementei o cache?',
+            timestamp: Date.now(),
+            isFinal: true
+          }, sessionId);
+        }
+
+        if (msg.type === 'conversation.tone.updated') {
+          resolve();
+        }
+      });
+
+      ws.on('error', reject);
+    });
+
+    ws.close();
+
+    expect(receivedMessages.some(message => message.type === 'transcript.final')).toBe(true);
+    expect(receivedMessages.some(message => message.type === 'question.detected')).toBe(false);
   });
 });

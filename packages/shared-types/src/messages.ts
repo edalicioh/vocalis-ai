@@ -166,6 +166,10 @@ export interface Settings {
   jobDescription: JobDescription;
   /** Idioma da interface (padrão: pt-BR) */
   uiLanguage?: UiLanguage;
+  /** Habilita tradução da transcrição em tempo real */
+  realtimeTranslation?: boolean;
+  /** Idioma de destino da tradução (padrão: pt-BR) */
+  targetTranslationLanguage?: string;
 }
 
 // ============================================================
@@ -182,6 +186,8 @@ export interface Utterance {
   confidence?: number;
   /** Idioma detectado */
   language?: string;
+  /** Texto traduzido em tempo real (se aplicável) */
+  translatedText?: string;
   /** Timestamp de início do trecho (segundos) */
   start?: number;
   /** Timestamp de fim do trecho (segundos) */
@@ -296,6 +302,13 @@ export interface AnswerFailedPayload {
 // ============================================================
 // Dados de Áudio — RF-003
 // ============================================================
+
+export type AudioSource = 'tab' | 'microphone';
+
+export interface SessionRegisterPayload {
+  /** Origem opcional para conexões dedicadas ao envio de áudio. */
+  audioSource?: AudioSource;
+}
 
 export interface AudioChunkPayload {
   sampleRate: number;

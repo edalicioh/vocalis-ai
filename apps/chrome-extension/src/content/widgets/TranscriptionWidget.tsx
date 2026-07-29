@@ -28,6 +28,11 @@ export const TranscriptionWidget: React.FC<TranscriptionWidgetProps> = ({
   isMinimized,
   opacity
 }) => {
+  const speakerLabels: Record<Utterance['speaker'], string> = {
+    interviewer: 'Entrevistador',
+    candidate: 'Você',
+    unknown: 'Fala'
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
   const [userIsScrolling, setUserIsScrolling] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -207,9 +212,14 @@ export const TranscriptionWidget: React.FC<TranscriptionWidgetProps> = ({
               <div key={i} style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#94a3b8', fontWeight: 600, marginBottom: '2px' }}>
                   <User size={10} color="#38bdf8" />
-                  <span>{u.speaker || 'FALA'}</span>
+                  <span>{speakerLabels[u.speaker] || 'Fala'}</span>
                 </div>
                 <div style={{ color: '#f8fafc' }}>{u.text}</div>
+                {u.translatedText && (
+                  <div style={{ color: '#38bdf8', fontSize: '12px', marginTop: '2px', fontStyle: 'italic' }}>
+                    🌐 {u.translatedText}
+                  </div>
+                )}
               </div>
             ))}
 
