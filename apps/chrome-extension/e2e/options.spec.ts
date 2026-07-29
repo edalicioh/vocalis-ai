@@ -83,12 +83,12 @@ test.describe('Chrome Extension E2E — Página de Opções & Perfil', () => {
 
     await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
 
-    // 1. Seleciona o provedor Gemini
-    const providerSelect = page.locator('select').first();
+    // 1. Seleciona o provedor Gemini (segundo select, após idioma)
+    const providerSelect = page.locator('select').nth(1);
     await providerSelect.selectOption('gemini');
 
-    // 2. Verifica que o seletor de modelos do Gemini está visível
-    const modelSelect = page.locator('select').nth(1);
+    // 2. Verifica que o seletor de modelos do Gemini está visível (terceiro select)
+    const modelSelect = page.locator('select').nth(2);
     await expect(modelSelect).toBeVisible();
 
     // 3. Escolhe a opção de digitação livre

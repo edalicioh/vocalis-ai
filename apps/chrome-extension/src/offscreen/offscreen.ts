@@ -1,6 +1,3 @@
-import { ChromeBuiltInAIProcessor } from './chrome-ai-processor';
-import { ChromeRewriterProcessor } from './chrome-rewriter-processor';
-
 let ws: WebSocket | null = null;
 let audioContext: AudioContext | null = null;
 let tabStream: MediaStream | null = null;
@@ -11,8 +8,6 @@ let audioWorkletNode: AudioWorkletNode | null = null;
 let sentAudioChunks = 0;
 
 let activeSessionId: string | null = null;
-let aiProcessor: ChromeBuiltInAIProcessor | null = null;
-const rewriterProcessor = new ChromeRewriterProcessor();
 
 function connectWebSocket() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -28,15 +23,6 @@ function connectWebSocket() {
     if (activeSessionId) {
       ws?.send(JSON.stringify({ type: 'session.register', sessionId: activeSessionId, payload: {} }));
     }
-
-    if (!aiProcessor) {
-      aiProcessor = new ChromeBuiltInAIProcessor();
-    }
-    const status = await aiProcessor.initCapabilities();
-    chrome.runtime.sendMessage({
-      type: 'CHROME_AI_STATUS_UPDATE',
-      status: status
-    }).catch(() => {});
   };
 
   ws.onclose = () => {
@@ -66,16 +52,6 @@ chrome.runtime.onMessage.addListener((message) => {
     if (audioWorkletNode) {
       audioWorkletNode.port.postMessage({ rmsThreshold: message.rmsThreshold });
     }
-  } else if (message.type === 'CHROME_AI_REWRITE' && message.text && message.style) {
-    rewriterProcessor.rewriteText(message.text, message.style).then((res) => {
-      chrome.runtime.sendMessage({
-        type: 'CHROME_AI_REWRITE_RESPONSE',
-        rewrittenText: res.rewrittenText,
-        style: message.style,
-        suggestionId: message.suggestionId,
-        success: res.success
-      }).catch(() => {});
-    });
   }
 });
 
