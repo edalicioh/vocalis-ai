@@ -4,6 +4,8 @@
 
 # 🎙️ Vocalis AI — Copiloto de Conversas e Entrevistas Técnicas
 
+🌐 **[Português (Brasil)](README.md)** | **[English](README.en.md)**
+
 [![Versão](https://img.shields.io/badge/vers%C3%A3o-v1.0.0-blue.svg)](CHANGELOG.md)
 [![Licença](https://img.shields.io/badge/licen%C3%A7a-GPL--2.0-green.svg)](LICENSE)
 [![Brand Brief](https://img.shields.io/badge/marca-Brand%20Brief-purple.svg)](BRAND_BRIEF.md)

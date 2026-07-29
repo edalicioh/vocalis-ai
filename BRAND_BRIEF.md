@@ -1,5 +1,7 @@
 # Briefing da Marca (Brand Brief) — Vocalis AI
 
+🌐 **[Português (Brasil)](BRAND_BRIEF.md)** | **[English](BRAND_BRIEF.en.md)**
+
 Este documento estabelece a visão, o posicionamento, o tom de voz e o guia de estilo visual oficial da marca **Vocalis AI**.
 
 ---

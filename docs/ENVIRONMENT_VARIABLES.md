@@ -1,5 +1,7 @@
 # Referência de Variáveis de Ambiente — Vocalis AI
 
+🌐 **[Português (Brasil)](ENVIRONMENT_VARIABLES.md)** | **[English](ENVIRONMENT_VARIABLES.en.md)**
+
 Todas as configurações do **Vocalis AI** podem ser ajustadas através de variáveis de ambiente definidas no arquivo `.env` na raiz do repositório ou injetadas no ambiente de execução.
 
 ---

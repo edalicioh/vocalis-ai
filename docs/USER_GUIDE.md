@@ -1,5 +1,7 @@
 # Guia do Usuário — Vocalis AI
 
+🌐 **[Português (Brasil)](USER_GUIDE.md)** | **[English](USER_GUIDE.en.md)**
+
 Este guia explica como instalar, configurar e utilizar o **Vocalis AI** durante suas reuniões e entrevistas técnicas.
 
 ---

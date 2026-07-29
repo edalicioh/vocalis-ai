@@ -1,5 +1,7 @@
 # Arquitetura Técnica — Vocalis AI
 
+🌐 **[Português (Brasil)](ARCHITECTURE.md)** | **[English](ARCHITECTURE.en.md)**
+
 Este documento descreve a arquitetura detalhada do **Vocalis AI**, cobrindo o fluxo de dados em tempo real, a infraestrutura do monorepo, o pipeline de áudio e a integração com provedores de Inteligência Artificial.
 
 ---
