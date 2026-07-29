@@ -106,4 +106,29 @@ test.describe('Chrome Extension E2E — Página de Opções & Perfil', () => {
     const saveSuccess = page.locator('text=✓ Salvo!');
     await expect(saveSuccess).toBeVisible({ timeout: 5000 });
   });
+
+  test('deve manter análise local para configurações antigas e persistir o modo híbrido', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await page.evaluate(async () => {
+      await chrome.storage.local.clear();
+      await chrome.storage.local.set({ role: 'Configuração antiga' });
+    });
+    await page.reload();
+
+    await page.getByRole('button', { name: /Modos/ }).click();
+
+    const analysisMode = page.getByLabel('Detecção de perguntas e tom');
+    await expect(analysisMode).toHaveValue('local');
+    await expect(page.getByText(/No modo híbrido, o resumo e as falas recentes são enviados/)).toBeVisible();
+
+    await analysisMode.selectOption('hybrid');
+    await page.getByRole('button', { name: 'Salvar Configurações' }).click();
+
+    await expect.poll(() => page.evaluate(async () => {
+      const stored = await chrome.storage.local.get('conversationAnalysisMode');
+      return stored.conversationAnalysisMode;
+    })).toBe('hybrid');
+  });
 });

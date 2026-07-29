@@ -1,6 +1,4 @@
 import { ConversationTone, Utterance } from '@conversation-copilot/shared-types';
-import { AnswerProvider, AnswerInput } from './answer-provider.js';
-import { ContextManager } from './context-manager.js';
 
 /**
  * Resultado da análise de tom da conversa.
@@ -11,258 +9,160 @@ export interface ToneAnalysisResult {
   summary: string;
 }
 
+interface ToneSignal {
+  pattern: RegExp;
+  weight: number;
+}
+
+interface ToneScore {
+  tone: ConversationTone;
+  score: number;
+  evidence: number;
+}
+
 /**
- * Analisador de tom emocional da conversa (temperatura).
- *
- * Utiliza análise híbrida:
- * 1. Heurística rápida (sem LLM) — contagem de sinais léxicos e estruturais
- * 2. LLM em background (a cada N falas) — classificação semântica
- *
- * O resultado é armazenado no ContextManager e broadcast para a extensão.
+ * Analisador heurístico local do tom emocional da conversa.
  */
 export class ToneAnalyzer {
+  private static readonly RECENT_WINDOW_SIZE = 12;
+  private static readonly MIN_EVIDENCE = 2;
+  private static readonly MIN_SCORE = 1.35;
+  private static readonly MIN_MARGIN = 0.35;
 
-  // ========= Termos de referência por tom =========
-
-  private static readonly TONE_SIGNALS: Record<ConversationTone, {
-    positive: RegExp[];
-    negative: RegExp[];
-    structural: (utterances: Utterance[]) => number;
-  }> = {
-    amigável: {
-      positive: [
-        /\b(obrigad[oa]|por favor|com certeza|ótimo|excelente|legal|bacana|show|beleza|blz|valeu|abraço|bom dia|boa tarde|boa noite)\b/i,
-        /\b(haha|hehe|kkk|rsrs|😊|😄|👍)\b/i
-      ],
-      negative: [
-        /\b(péssimo|horrível|não aceito|inaceitável|ruim|lixo)\b/i
-      ],
-      structural: (u) => {
-        const avgLen = u.reduce((sum, x) => sum + x.text.length, 0) / u.length;
-        return avgLen > 40 ? 0.1 : 0;
-      }
-    },
-    tenso: {
-      positive: [
-        /\b(por favor|com urgência|preciso agora|não posso esperar|mais uma vez|não entendi|repita|repete)\b/i
-      ],
-      negative: [
-        /\b(não|nunca|impossível|errado|incorreto|problema|erro|falha|bug|crash)\b/i,
-        /\.{3,}/,
-        /!{2,}/
-      ],
-      structural: (u) => {
-        const shortAnswers = u.filter(x => x.speaker === 'candidate' && x.text.length < 30).length;
-        return shortAnswers >= 3 ? 0.15 : 0;
-      }
-    },
-    disperso: {
-      positive: [
-        /\b(mas|however|então|enfim|ah sim|ah tá|ok|certo|beleza)\b/i
-      ],
-      negative: [],
-      structural: (u) => {
-        const topicChanges = this.countTopicChanges(u);
-        return topicChanges >= 3 ? 0.2 : 0;
-      }
-    },
-    interessado: {
-      positive: [
-        /\b(interessante|curioso|legal|bacana|adorei|gostei|muito bom|incrível|surpreendente)\b/i,
-        /\b(conta mais|me explica|como assim|por que|pode detalhar|quero saber)\b/i
-      ],
-      negative: [],
-      structural: (u) => {
-        const questions = u.filter(x => x.text.includes('?')).length;
-        return questions >= 4 ? 0.15 : 0;
-      }
-    },
-    confuso: {
-      positive: [
-        /\b(não entendi|não ficou claro|como assim|pode explicar|repita|repete|não peguei|não entendi bem|não ficou claro)\b/i,
-        /\b(não sei|tô perdido|estou perdido|não faço ideia|não tenho certeza|acho que)\b/i
-      ],
-      negative: [],
-      structural: (u) => {
-        const repetitions = this.countRepetitions(u);
-        return repetitions >= 2 ? 0.2 : 0;
-      }
-    },
-    formal: {
-      positive: [
-        /\b(por gentileza|senhor|senhora|com licença|se não me engano|a mim parece|gostaria de)\b/i,
-        /\b(senhor[es]?|doutor[a]?|professor[a]?)\b/i
-      ],
-      negative: [
-        /\b(cara|mano|véi|pô|caraio|porra|foda)\b/i,
-        /\b(kkk|rsrs|hehe)\b/i
-      ],
-      structural: (u) => {
-        const avgLen = u.reduce((sum, x) => sum + x.text.length, 0) / u.length;
-        return avgLen > 60 ? 0.1 : 0;
-      }
-    },
-    neutro: {
-      positive: [],
-      negative: [],
-      structural: () => 0
-    }
+  private static readonly TONE_SIGNALS: Record<ConversationTone, ToneSignal[]> = {
+    amigável: [
+      { pattern: /\b(obrigad[oa]|valeu|por favor|bom dia|boa tarde|boa noite)\b/i, weight: 1 },
+      { pattern: /\b(ótim[oa]|excelente|maravilhos[oa]|que bom|parabéns)\b/i, weight: 1 },
+      { pattern: /(?:\b(?:haha|hehe|kkk|rsrs)\b|[😊😄👍])/i, weight: 0.8 }
+    ],
+    tenso: [
+      { pattern: /\b(com urgência|urgente|preciso (?:disso )?agora|não posso esperar|sem mais atrasos?)\b/i, weight: 1.2 },
+      { pattern: /\b(inaceitável|não aceito|absurdo|estou irritad[oa]|isso é inadmissível)\b/i, weight: 1.3 },
+      { pattern: /\b(mais uma vez|já falei|quantas vezes|pare de enrolar|você não está ouvindo)\b/i, weight: 1.1 },
+      { pattern: /!{2,}/, weight: 0.35 }
+    ],
+    disperso: [
+      { pattern: /\b(mudando de assunto|outra coisa|a propósito|falando em outra coisa)\b/i, weight: 1 },
+      { pattern: /\b(voltando ao assunto|voltando ao que eu dizia|onde eu estava)\b/i, weight: 1 },
+      { pattern: /\b(enfim,? deixa pra lá|mas isso é outro assunto|depois a gente volta nisso)\b/i, weight: 0.9 }
+    ],
+    interessado: [
+      { pattern: /\b(interessante|curioso|adorei|gostei|incrível|surpreendente)\b/i, weight: 1 },
+      { pattern: /\b(conta mais|me explica|pode detalhar|quero entender|quero saber|como assim)\b/i, weight: 1.1 },
+      { pattern: /\?/, weight: 0.35 }
+    ],
+    confuso: [
+      { pattern: /\b(não entendi|não ficou claro|não peguei|não estou entendendo)\b/i, weight: 1.2 },
+      { pattern: /\b(estou perdido|tô perdido|não faço ideia|não tenho certeza)\b/i, weight: 1.1 },
+      { pattern: /\b(pode explicar (?:de novo|novamente)|pode repetir|repita|repete)\b/i, weight: 1.1 }
+    ],
+    formal: [
+      { pattern: /\b(por gentileza|prezad[oa]s?|senhor(?:a|es|as)?|doutor(?:a|es|as)?)\b/i, weight: 1 },
+      { pattern: /\b(gostaria de solicitar|venho por meio deste|conforme mencionado|agradeço antecipadamente)\b/i, weight: 1 },
+      { pattern: /\b(com licença|se não me engano|a meu ver)\b/i, weight: 0.8 }
+    ],
+    neutro: []
   };
 
   /**
-   * Analisa o tom usando heurística rápida (sem LLM).
-   * Retorna a classificação e confiança baseada em sinais léxicos e estruturais.
+   * Analisa localmente o tom das falas recentes por sinais léxicos ponderados.
    */
   public static analyzeHeuristic(utterances: Utterance[]): ToneAnalysisResult {
-    if (utterances.length === 0) {
-      return { tone: 'neutro', confidence: 0.3, summary: 'Conversa não iniciada.' };
+    const recentUtterances = utterances
+      .filter(utterance => utterance.isFinal && utterance.text.trim().length > 0)
+      .slice(-this.RECENT_WINDOW_SIZE);
+
+    if (recentUtterances.length === 0) {
+      return {
+        tone: 'neutro',
+        confidence: 0.2,
+        summary: 'Conversa não iniciada ou sem conteúdo suficiente para análise.'
+      };
     }
 
-    const scores: Partial<Record<ConversationTone, number>> = {};
-
-    for (const [tone, signals] of Object.entries(this.TONE_SIGNALS) as Array<[ConversationTone, typeof this.TONE_SIGNALS[ConversationTone]]>) {
-      if (tone === 'neutro') continue;
-
-      let score = 0;
-
-      // Pontuação por sinais positivos
-      for (const pattern of signals.positive) {
-        const matches = utterances.filter(u => pattern.test(u.text)).length;
-        score += matches * 0.1;
-      }
-
-      // Pontuação por sinais negativos
-      for (const pattern of signals.negative) {
-        const matches = utterances.filter(u => pattern.test(u.text)).length;
-        score -= matches * 0.1;
-      }
-
-      // Pontuação estrutural
-      score += signals.structural(utterances);
-
-      scores[tone] = Math.max(0, score);
+    if (recentUtterances.length < 2) {
+      return {
+        tone: 'neutro',
+        confidence: 0.25,
+        summary: 'Ainda não há falas recentes suficientes para identificar o tom.'
+      };
     }
 
-    // Encontra o tom com maior pontuação
-    let bestTone: ConversationTone = 'neutro';
-    let bestScore = 0.15; // mínimo para sair do neutro
+    const scores = (Object.entries(this.TONE_SIGNALS) as Array<[ConversationTone, ToneSignal[]]>)
+      .filter(([tone]) => tone !== 'neutro')
+      .map(([tone, signals]): ToneScore => {
+        let score = 0;
+        let evidence = 0;
 
-    for (const [tone, score] of Object.entries(scores) as Array<[ConversationTone, number]>) {
-      if (score > bestScore) {
-        bestScore = score;
-        bestTone = tone;
-      }
+        for (let index = 0; index < recentUtterances.length; index++) {
+          const utterance = recentUtterances[index];
+          const recency = index / (recentUtterances.length - 1);
+          const recencyWeight = 0.55 + recency * 0.45;
+
+          for (const signal of signals) {
+            // search não mantém o lastIndex mutável de expressões globais entre falas.
+            if (utterance.text.search(signal.pattern) >= 0) {
+              score += signal.weight * recencyWeight;
+              evidence++;
+            }
+          }
+        }
+
+        return { tone, score, evidence };
+      })
+      .sort((left, right) => right.score - left.score);
+
+    const best = scores[0];
+    const second = scores[1];
+    const margin = best.score - second.score;
+
+    if (best.evidence < this.MIN_EVIDENCE || best.score < this.MIN_SCORE) {
+      return {
+        tone: 'neutro',
+        confidence: 0.35,
+        summary: 'Não há evidências recentes suficientes para definir um tom predominante.'
+      };
     }
 
-    const confidence = Math.min(0.85, bestScore + 0.3);
+    if (margin < this.MIN_MARGIN) {
+      return {
+        tone: 'neutro',
+        confidence: this.roundConfidence(0.3 + Math.max(0, margin) * 0.2),
+        summary: 'Os sinais recentes são mistos, sem um tom predominante claro.'
+      };
+    }
 
-    const summary = this.generateHeuristicSummary(bestTone, utterances);
+    const confidence = 0.45
+      + Math.min(0.3, best.score * 0.08)
+      + Math.min(0.2, margin * 0.1)
+      + Math.min(0.05, Math.max(0, best.evidence - this.MIN_EVIDENCE) * 0.02);
 
     return {
-      tone: bestTone,
-      confidence: Math.round(confidence * 100) / 100,
-      summary
+      tone: best.tone,
+      confidence: this.roundConfidence(confidence),
+      summary: this.generateHeuristicSummary(best.tone)
     };
   }
 
-  /**
-   * Analisa o tom usando LLM (chamada assíncrona).
-   * Usado quando heurística não é suficiente ou para refinar.
-   */
-  public static async analyzeWithLLM(
-    cm: ContextManager,
-    answerProvider: AnswerProvider
-  ): Promise<ToneAnalysisResult | null> {
-    if (!answerProvider.isConfigured()) {
-      return null;
-    }
-
-    const prompt = cm.buildToneAnalysisPrompt();
-
-    try {
-      const input: AnswerInput = {
-        requestId: `tone-${Date.now()}`,
-        question: 'análise de tom',
-        prompt,
-        responseMode: 'short'
-      };
-
-      let responseText = '';
-      for await (const event of answerProvider.generate(input)) {
-        if (event.type === 'answer.delta') {
-          responseText += (event.data as any).chunk || '';
-        }
-      }
-
-      // Parseia a resposta JSON
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        const validTones: ConversationTone[] = ['neutro', 'amigável', 'tenso', 'disperso', 'interessado', 'confuso', 'formal'];
-        const tone = validTones.includes(parsed.tone) ? parsed.tone : 'neutro';
-        const confidence = typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5;
-        const summary = typeof parsed.summary === 'string' ? parsed.summary : 'Tom não classificado.';
-
-        return { tone, confidence, summary };
-      }
-    } catch {
-      // Erro silencioso — fallback para heurística
-    }
-
-    return null;
+  private static roundConfidence(confidence: number): number {
+    const boundedConfidence = Math.min(1, Math.max(0, confidence));
+    return Math.round(boundedConfidence * 100) / 100;
   }
 
   /**
-   * Gera resumo descritivo baseado no tom detectado por heurística.
+   * Gera um resumo sem atribuir falas a participantes, pois a origem pode estar incorreta.
    */
-  private static generateHeuristicSummary(tone: ConversationTone, utterances: Utterance[]): string {
-    const totalUtterances = utterances.length;
-    const interviewerUtterances = utterances.filter(u => u.speaker === 'interviewer').length;
-    const candidateUtterances = utterances.filter(u => u.speaker === 'candidate').length;
-    const avgLength = Math.round(utterances.reduce((sum, u) => sum + u.text.length, 0) / totalUtterances);
-
-    const base = `Conversa com ${totalUtterances} falas (${interviewerUtterances} entrevistador, ${candidateUtterances} candidato), média de ${avgLength} caracteres.`;
-
+  private static generateHeuristicSummary(tone: ConversationTone): string {
     const summaries: Record<ConversationTone, string> = {
-      neutro: `${base} Tom neutro e equilibrado.`,
-      amigável: `${base} Tom cordial e descontraído.`,
-      tenso: `${base} Possível tensão — respostas curtas ou pressão.`,
-      disperso: `${base} Possível dispersão — múltiplos tópicos.`,
-      interessado: `${base} Engajamento alto — muitas perguntas e detalhes.`,
-      confuso: `${base} Possível confusão — pedidos de esclarecimento.`,
-      formal: `${base} Tom formal e profissional.`
+      neutro: 'A conversa recente mantém um tom neutro e equilibrado.',
+      amigável: 'A conversa recente apresenta cordialidade e descontração.',
+      tenso: 'A conversa recente apresenta sinais de pressão ou confronto.',
+      disperso: 'A conversa recente apresenta mudanças frequentes de assunto.',
+      interessado: 'A conversa recente apresenta curiosidade e interesse em aprofundar o tema.',
+      confuso: 'A conversa recente apresenta dúvidas ou pedidos de esclarecimento.',
+      formal: 'A conversa recente apresenta linguagem formal e respeitosa.'
     };
 
-    return summaries[tone] || base;
-  }
-
-  /**
-   * Conta mudanças de tópico aproximadas (baseado em marcadores de transição).
-   */
-  private static countTopicChanges(utterances: Utterance[]): number {
-    const transitionPatterns = /\b(mas|however|então|enfim|sobre|voltando|outra coisa|ah sim|a propósito)\b/i;
-    let count = 0;
-    for (const u of utterances) {
-      if (transitionPatterns.test(u.text)) count++;
-    }
-    return count;
-  }
-
-  /**
-   * Conta repetições suspeitas (mesma frase ou palavras-chave repetidas).
-   */
-  private static countRepetitions(utterances: Utterance[]): number {
-    const texts = utterances.map(u => u.text.toLowerCase());
-    let count = 0;
-
-    for (let i = 1; i < texts.length; i++) {
-      // Verifica se há palavras significativas repetidas consecutivas
-      const words = texts[i].split(/\s+/).filter(w => w.length > 4);
-      const prevWords = texts[i - 1].split(/\s+/).filter(w => w.length > 4);
-      const overlap = words.filter(w => prevWords.includes(w)).length;
-      if (overlap >= 2) count++;
-    }
-
-    return count;
+    return summaries[tone];
   }
 }

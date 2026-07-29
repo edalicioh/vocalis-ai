@@ -305,6 +305,15 @@ O Orquestrador utiliza uma abstração desacoplada (`AnswerProvider`) que permit
 | **Completo** | 80–150 palavras | Discussões técnicas |
 | **Estruturado** | Abertura → Decisão → Justificativa → Trade-offs → Exemplo | Respostas complexas |
 
+### Detecção de perguntas e tom
+
+| Modo | Comportamento | Dados enviados para classificação externa |
+| :--- | :--- | :--- |
+| **Local** (padrão) | Perguntas e tom são classificados no orquestrador local | Nenhum |
+| **Híbrido** | Valida perguntas ambíguas e refina o tom periodicamente | Resumo acumulado, oito falas finais recentes e modo da reunião |
+
+Perguntas claras são sempre resolvidas localmente para preservar a baixa latência. A análise externa é assíncrona, possui timeout e não é iniciada enquanto uma resposta está sendo gerada. Essa opção controla somente a classificação de pergunta e tom; respostas e atas seguem o provedor configurado.
+
 ### Modos visuais do painel
 
 | Modo | O que exibe |
@@ -329,7 +338,7 @@ O projeto utiliza duas ferramentas de testes automatizados para garantir qualida
 
 ### 1. Testes Unitários e de Integração (Vitest)
 
-Testam os componentes do Orquestrador (`WhisperClient`, `ContextManager`, `QuestionDetector`, `AnswerProviderManager`, `meeting-modes.test.ts`, servidores Fastify WS/HTTP), os processadores locais Chrome AI (`chrome-ai-processor.test.ts`, `chrome-rewriter-processor.test.ts`), medição de áudio VAD (`vad-meter.test.ts`) e o estado dos widgets (**107 testes aprovados**).
+Testam os componentes do Orquestrador (`WhisperClient`, `ContextManager`, `QuestionDetector`, `ToneAnalyzer`, `ExternalConversationAnalyzer`, `AnswerProviderManager`, `meeting-modes.test.ts`, servidores Fastify WS/HTTP), os processadores locais Chrome AI, a medição de áudio VAD e o estado dos widgets (**134 testes aprovados**).
 
 ```bash
 # Executa a suíte de testes unitários e de integração

@@ -6,7 +6,8 @@ import {
   ConversationSummary,
   ConversationTone,
   ToneUpdatePayload,
-  MeetingMode
+  MeetingMode,
+  ConversationAnalysisMode
 } from '@conversation-copilot/shared-types';
 
 /**
@@ -58,6 +59,7 @@ export class ContextManager {
   };
 
   private meetingMode: MeetingMode = 'technical_interview';
+  private conversationAnalysisMode: ConversationAnalysisMode = 'local';
   private modeNotes: Partial<Record<MeetingMode, string>> = {};
 
   private readonly SYSTEM_PROMPTS: Record<MeetingMode, string> = {
@@ -88,6 +90,14 @@ export class ContextManager {
     return this.meetingMode;
   }
 
+  public setConversationAnalysisMode(mode: ConversationAnalysisMode) {
+    this.conversationAnalysisMode = mode;
+  }
+
+  public getConversationAnalysisMode(): ConversationAnalysisMode {
+    return this.conversationAnalysisMode;
+  }
+
   public getModeNotes(mode?: MeetingMode): string {
     const targetMode = mode || this.meetingMode;
     return this.modeNotes[targetMode] || '';
@@ -114,8 +124,8 @@ export class ContextManager {
   private toneConfidence: number = 0.5;
   private toneSummary: string = '';
   private toneHistory: Array<{ tone: ConversationTone; at: number }> = [];
-  private readonly TONE_TRIGGER_COUNT = 8;
-  private finalUtterancesSinceLastToneAnalysis = 0;
+  private readonly TONE_REFINEMENT_TRIGGER_COUNT = 8;
+  private finalUtterancesSinceLastToneRefinement = 0;
 
   // ========= Atualização de perfil/vaga =========
 
@@ -146,18 +156,25 @@ export class ContextManager {
       isFinal
     };
 
-    this.utterances.push(utterance);
-    if (this.utterances.length > this.MAX_WINDOW_SIZE * 2) {
-      this.utterances = this.utterances.slice(-this.MAX_WINDOW_SIZE);
-    }
-
     if (isFinal) {
+      this.utterances.push(utterance);
+      if (this.utterances.length > this.MAX_WINDOW_SIZE * 2) {
+        this.utterances = this.utterances.slice(-this.MAX_WINDOW_SIZE);
+      }
       this.finalUtterancesSinceLastSummary++;
-      this.finalUtterancesSinceLastToneAnalysis++;
+      this.finalUtterancesSinceLastToneRefinement++;
       this.lastFinalUtteranceTimestamp = utterance.timestamp;
       this.partialBuffer = [];
     } else {
-      this.partialBuffer.push(text);
+      const accumulated = this.getAccumulatedPartials();
+      const normalizedAccumulated = accumulated.toLocaleLowerCase('pt-BR');
+      const normalizedText = text.trim().toLocaleLowerCase('pt-BR');
+
+      if (normalizedText.startsWith(normalizedAccumulated) && accumulated) {
+        this.partialBuffer = [text.trim()];
+      } else if (!normalizedAccumulated.includes(normalizedText)) {
+        this.partialBuffer.push(text.trim());
+      }
       if (this.partialBuffer.length > this.MAX_PARTIAL_BUFFER) {
         this.partialBuffer.shift();
       }
@@ -194,11 +211,16 @@ export class ContextManager {
   // ========= Tom da conversa =========
 
   /**
-   * Verifica se é hora de analisar o tom da conversa.
+   * Verifica se é hora de refinar externamente o tom da conversa.
    * Trigger: a cada 8 falas finais.
    */
-  public shouldAnalyzeTone(): boolean {
-    return this.finalUtterancesSinceLastToneAnalysis >= this.TONE_TRIGGER_COUNT;
+  public shouldRefineTone(): boolean {
+    return this.finalUtterancesSinceLastToneRefinement >= this.TONE_REFINEMENT_TRIGGER_COUNT;
+  }
+
+  /** Reinicia a janela depois que uma tentativa de refinamento é iniciada. */
+  public markToneRefinementStarted(): void {
+    this.finalUtterancesSinceLastToneRefinement = 0;
   }
 
   /**
@@ -209,7 +231,6 @@ export class ContextManager {
     this.currentTone = tone;
     this.toneConfidence = confidence;
     this.toneSummary = summary;
-    this.finalUtterancesSinceLastToneAnalysis = 0;
 
     if (previousTone !== tone) {
       this.toneHistory.push({ tone, at: Date.now() });
@@ -233,40 +254,6 @@ export class ContextManager {
 
   public getCurrentTone(): ConversationTone {
     return this.currentTone;
-  }
-
-  /**
-   * Gera o prompt de análise de tom para ser processado em background.
-   */
-  public buildToneAnalysisPrompt(): string {
-    const recentDialogue = this.utterances
-      .filter(u => u.isFinal)
-      .map(u => `[${u.speaker.toUpperCase()}]: ${u.text}`)
-      .join('\n');
-
-    return `
-Analise o tom emocional e o clima da conversa a seguir.
-Classifique o tom geral em UMA das categorias: neutro, amigável, tenso, disperso, interessado, confuso, formal.
-
-Considere:
-- Densidade de perguntas vs respostas
-- Comprimento e tom das respostas (curtas = tenso/disperso, longas = interessado/amigável)
-- Presença de mal-entendidos ou pedidos de repetição (= confuso)
-- Formalidade do vocabulário
-- Engajamento geral dos participantes
-
-Conversa:
-${recentDialogue}
-
-Tom atual armazenado: ${this.currentTone}
-
-Retorne EXATAMENTE neste formato JSON:
-{
-  "tone": "um dos: neutro | amigável | tenso | disperso | interessado | confuso | formal",
-  "confidence": 0.0 a 1.0,
-  "summary": "Descrição curta do clima (máx. 40 palavras)"
-}
-`.trim();
   }
 
   // ========= Sumarização (RF-018) =========

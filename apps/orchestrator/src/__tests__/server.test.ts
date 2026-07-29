@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import WebSocket from 'ws';
-import { server, startServer } from '../server.js';
-import { WSMessage, StatusUpdatePayload } from '@conversation-copilot/shared-types';
+import { processUtterance, server, startServer } from '../server.js';
+import {
+  QuestionDetectionResult,
+  StatusUpdatePayload,
+  WSMessage
+} from '@conversation-copilot/shared-types';
 
 describe('Orchestrator Fastify Server & WebSocket Interface', () => {
   let serverAddress: string;
@@ -112,5 +116,66 @@ describe('Orchestrator Fastify Server & WebSocket Interface', () => {
 
     const payload = statusMsg?.payload as StatusUpdatePayload;
     expect(payload.responseMode).toBe('full');
+  });
+
+  it('deve transmitir pergunta e tom, reconstruindo parciais sem duplicar perguntas', async () => {
+    const sessionId = 'test-session-detection';
+    const wsUrl = serverAddress.replace('http://', 'ws://') + '/ws';
+    const ws = new WebSocket(wsUrl);
+    const receivedMessages: WSMessage[] = [];
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({
+          type: 'settings.update',
+          sessionId,
+          payload: {
+            aiProvider: 'openai',
+            conversationAnalysisMode: 'local'
+          }
+        }));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString()) as WSMessage;
+        receivedMessages.push(msg);
+
+        if (msg.type === 'status.update') {
+          processUtterance({
+            id: 'partial-1',
+            speaker: 'unknown',
+            text: 'como você faria',
+            timestamp: Date.now(),
+            isFinal: false
+          }, sessionId);
+
+          const finalUtterance = {
+            id: 'final-1',
+            speaker: 'unknown' as const,
+            text: 'como você faria o cache distribuído?',
+            timestamp: Date.now(),
+            isFinal: true
+          };
+          processUtterance(finalUtterance, sessionId);
+          processUtterance({ ...finalUtterance, id: 'final-2' }, sessionId);
+        }
+
+        const finalCount = receivedMessages.filter(message => message.type === 'transcript.final').length;
+        const toneCount = receivedMessages.filter(message => message.type === 'conversation.tone.updated').length;
+        if (finalCount === 2 && toneCount === 2) {
+          resolve();
+        }
+      });
+
+      ws.on('error', reject);
+    });
+
+    ws.close();
+
+    const detectedQuestions = receivedMessages.filter(message => message.type === 'question.detected');
+    expect(detectedQuestions).toHaveLength(1);
+    expect((detectedQuestions[0].payload as QuestionDetectionResult).questionText)
+      .toBe('como você faria o cache distribuído?');
+    expect(receivedMessages.some(message => message.type === 'conversation.tone.updated')).toBe(true);
   });
 });

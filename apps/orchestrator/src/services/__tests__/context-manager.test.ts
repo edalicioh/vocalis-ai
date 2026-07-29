@@ -76,6 +76,15 @@ describe('ContextManager', () => {
     expect(cm.getAccumulatedPartials()).toBe('eu estava pensando que poderíamos usar kafka para isso');
   });
 
+  it('deve substituir hipóteses parciais cumulativas sem duplicar o texto', () => {
+    cm.addUtterance('como', 'interviewer', false);
+    cm.addUtterance('como você', 'interviewer', false);
+    cm.addUtterance('como você faria', 'interviewer', false);
+
+    expect(cm.getAccumulatedPartials()).toBe('como você faria');
+    expect(cm.getRecentUtterances()).toHaveLength(0);
+  });
+
   it('deve limpar o buffer de parciais quando chega uma transcrição final', () => {
     cm.addUtterance('eu estava pensando', 'interviewer', false);
     cm.addUtterance('que poderíamos usar', 'interviewer', false);
@@ -159,25 +168,29 @@ describe('ContextManager', () => {
     expect(payload.trends!.length).toBeLessThanOrEqual(10);
   });
 
-  it('deve disparar análise de tom a cada 8 falas finais', () => {
-    expect(cm.shouldAnalyzeTone()).toBe(false);
+  it('deve disparar refinamento de tom a cada 8 falas finais', () => {
+    expect(cm.shouldRefineTone()).toBe(false);
 
     for (let i = 0; i < 7; i++) {
       cm.addUtterance(`Fala ${i}`, 'interviewer', true);
-      expect(cm.shouldAnalyzeTone()).toBe(false);
+      expect(cm.shouldRefineTone()).toBe(false);
     }
 
     cm.addUtterance('Fala 8', 'interviewer', true);
-    expect(cm.shouldAnalyzeTone()).toBe(true);
+    expect(cm.shouldRefineTone()).toBe(true);
+
+    cm.updateTone('amigável', 0.8, 'Tom local amigável');
+    expect(cm.shouldRefineTone()).toBe(true);
+
+    cm.markToneRefinementStarted();
+    expect(cm.shouldRefineTone()).toBe(false);
   });
 
-  it('deve gerar prompt de análise de tom com o histórico', () => {
-    cm.addUtterance('Olá, como vai?', 'interviewer', true);
-    cm.addUtterance('Bem, obrigado!', 'candidate', true);
+  it('deve usar análise local por padrão e permitir habilitar o modo híbrido', () => {
+    expect(cm.getConversationAnalysisMode()).toBe('local');
 
-    const prompt = cm.buildToneAnalysisPrompt();
-    expect(prompt).toContain('Olá, como vai?');
-    expect(prompt).toContain('Bem, obrigado!');
-    expect(prompt).toContain('neutro');
+    cm.setConversationAnalysisMode('hybrid');
+
+    expect(cm.getConversationAnalysisMode()).toBe('hybrid');
   });
 });

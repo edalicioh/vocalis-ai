@@ -7,6 +7,7 @@ import {
   Settings,
   AIProvider,
   MeetingMode,
+  ConversationAnalysisMode,
   UiLanguage
 } from '@conversation-copilot/shared-types';
 import { t } from './i18n';
@@ -110,6 +111,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
 
   // Modos
   const [meetingMode, setMeetingMode] = useState<MeetingMode>('technical_interview');
+  const [conversationAnalysisMode, setConversationAnalysisMode] = useState<ConversationAnalysisMode>('local');
   const [modeNotes, setModeNotes] = useState<Record<MeetingMode, string>>({
     technical_interview: '',
     system_design: '',
@@ -129,6 +131,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   useEffect(() => {
     chrome.storage.local.get(null, (res) => {
       if (res.meetingMode) setMeetingMode(res.meetingMode);
+      setConversationAnalysisMode(res.conversationAnalysisMode === 'hybrid' ? 'hybrid' : 'local');
       if (res.modeNotes) setModeNotes(prev => ({ ...prev, ...res.modeNotes }));
       if (typeof res.rmsThreshold === 'number') setRmsThreshold(res.rmsThreshold);
       if (res.aiProvider) setAiProvider(res.aiProvider);
@@ -195,6 +198,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
     return {
       aiProvider,
       meetingMode,
+      conversationAnalysisMode,
       modeNotes,
       geminiApiKey,
       geminiModel,
@@ -229,7 +233,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
     } catch (e) {}
 
     chrome.storage.local.set({
-      aiProvider, meetingMode, modeNotes, rmsThreshold, geminiApiKey, geminiModel, openaiApiKey, openaiModel, anthropicApiKey, anthropicModel,
+      aiProvider, meetingMode, conversationAnalysisMode, modeNotes, rmsThreshold, geminiApiKey, geminiModel, openaiApiKey, openaiModel, anthropicApiKey, anthropicModel,
       ollamaEndpoint, ollamaModel, customProxyEndpoint, customProxyApiKey, customProxyModel,
       name, role, seniority, skills, experiences, projects,
       strengths, weaknesses, jobTitle, jobCompany, jobDescription,
@@ -432,6 +436,23 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
                 <option value="code_review">💻 Code Review (Complexidade e Refatoração)</option>
                 <option value="general">📝 Reunião Geral (Alinhamento e Action Items)</option>
               </select>
+            </div>
+
+            <div style={fieldGroupStyle}>
+              <label htmlFor="conversation-analysis-mode" style={labelStyle}>Detecção de perguntas e tom</label>
+              <select
+                id="conversation-analysis-mode"
+                aria-describedby="conversation-analysis-mode-description"
+                value={conversationAnalysisMode}
+                onChange={e => setConversationAnalysisMode(e.target.value as ConversationAnalysisMode)}
+                style={inputStyle}
+              >
+                <option value="local">Local (padrão)</option>
+                <option value="hybrid">Híbrido</option>
+              </select>
+              <p id="conversation-analysis-mode-description" style={{ fontSize: '10px', color: '#6b7280', margin: '2px 0 0' }}>
+                No modo híbrido, o resumo e as falas recentes são enviados ao provedor de IA para validar perguntas ambíguas e refinar o tom. Respostas e atas seguem as configurações próprias do provedor.
+              </p>
             </div>
 
             <div style={fieldGroupStyle}>

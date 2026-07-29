@@ -16,6 +16,9 @@ VITE_ORCHESTRATOR_HTTP_URL=http://localhost:3001
 
 # --- Whisper & Orchestrator Services ---
 WHISPER_WS_URL=ws://localhost:8000/ws/transcribe
+# Limites das análises híbridas em milissegundos
+EXTERNAL_QUESTION_TIMEOUT_MS=1200
+EXTERNAL_TONE_TIMEOUT_MS=5000
 
 # --- LLM Providers & Endpoints ---
 OLLAMA_ENDPOINT=http://localhost:11434

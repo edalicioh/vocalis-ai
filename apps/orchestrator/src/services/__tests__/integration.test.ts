@@ -159,7 +159,7 @@ describe('Integração: ContextManager → MeetingSummaryService', () => {
   });
 });
 
-describe('Integração: QuestionDetector — Limiares progressivos e pause detection', () => {
+describe('Integração: QuestionDetector — detecção textual e confirmação progressiva', () => {
   it('avalia cenário completo de entrevista com pausas progressivas', () => {
     // Cenário 1: Pausa curta, detecção não confirmada
     const q1 = QuestionDetector.detect('Como você lida com conflitos no time?', 300, true);
@@ -172,10 +172,10 @@ describe('Integração: QuestionDetector — Limiares progressivos e pause detec
     expect(q2.score).toBeGreaterThanOrEqual(0.35);
     expect(QuestionDetector.isPrefetchReady(750, q2.score)).toBe(q2.score >= 0.5);
 
-    // Cenário 3: Pausa longa confirmada, disparo de geração
+    // Cenário 3: a pausa permanece disponível apenas para consumidores progressivos
     const q3 = QuestionDetector.detect('Qual a diferença entre SQL e NoSQL?', 1100, true);
     expect(q3.isQuestion).toBe(true);
-    expect(q3.reasons).toContain('pausa longa confirmada');
+    expect(q3.reasons).not.toContain('pausa longa confirmada');
     expect(QuestionDetector.isConfirmed(1100, q3.score)).toBe(true);
   });
 
