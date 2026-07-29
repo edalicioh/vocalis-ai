@@ -1,0 +1,57 @@
+import { UiLanguage } from '@conversation-copilot/shared-types';
+
+export type TranslationKey =
+  | 'appName'
+  | 'tagline'
+  // HUD Bar
+  | 'hud.vadActive'
+  | 'hud.vadSilent'
+  | 'hud.listening'
+  | 'hud.paused'
+  | 'hud.mode'
+  | 'hud.clear'
+  | 'hud.settings'
+  | 'hud.opacity'
+  // Response Panel
+  | 'panel.title'
+  | 'panel.copy'
+  | 'panel.copied'
+  | 'panel.shorten'
+  | 'panel.formal'
+  | 'panel.technical'
+  | 'panel.expand'
+  | 'panel.undo'
+  | 'panel.rewriting'
+  | 'panel.noSuggestions'
+  | 'panel.waitingQuestion'
+  // Settings Tabs & Labels
+  | 'settings.tabGeneral'
+  | 'settings.tabAi'
+  | 'settings.tabModes'
+  | 'settings.tabProfile'
+  | 'settings.tabInterface'
+  | 'settings.language'
+  | 'settings.save'
+  | 'settings.saved'
+  | 'settings.saving'
+  | 'settings.provider'
+  | 'settings.apiKey'
+  | 'settings.model'
+  | 'settings.endpoint'
+  | 'settings.testConnection'
+  | 'settings.connectionOk'
+  | 'settings.connectionFailed'
+  // Modes
+  | 'mode.technical_interview'
+  | 'mode.system_design'
+  | 'mode.code_review'
+  | 'mode.general'
+  // Popup
+  | 'popup.statusConnected'
+  | 'popup.statusDisconnected'
+  | 'popup.startSession'
+  | 'popup.stopSession'
+  | 'popup.openOptions'
+  | 'popup.history';
+
+export type Translations = Record<TranslationKey, string>;

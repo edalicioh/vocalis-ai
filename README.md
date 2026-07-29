@@ -1,6 +1,26 @@
-# 🎙️ Copiloto de Conversas e Entrevistas Técnicas
+<p align="center">
+  <img src="assets/logo.png" alt="Vocalis AI Logo" width="160" />
+</p>
 
-Assistente em tempo real que transcreve reuniões, detecta perguntas e sugere respostas contextuais com IA — tudo rodando localmente.
+# 🎙️ Vocalis AI — Copiloto de Conversas e Entrevistas Técnicas
+
+[![Versão](https://img.shields.io/badge/vers%C3%A3o-v1.0.0-blue.svg)](CHANGELOG.md)
+[![Licença](https://img.shields.io/badge/licen%C3%A7a-GPL--2.0-green.svg)](LICENSE)
+[![Brand Brief](https://img.shields.io/badge/marca-Brand%20Brief-purple.svg)](BRAND_BRIEF.md)
+[![Documentação](https://img.shields.io/badge/docs-Documenta%C3%A7%C3%A3o-orange.svg)](docs/USER_GUIDE.md)
+
+Assistente em tempo real que transcreve reuniões, detecta perguntas e sugere respostas contextuais com IA — tudo rodando com baixa latência, internacionalização (`pt-BR`/`en`) e suporte a IA local on-device.
+
+---
+
+## 📚 Central de Documentação
+
+- 📘 [**Guia do Usuário**](docs/USER_GUIDE.md): Instruções passo a passo de instalação, uso e configurações.
+- 🏗️ [**Arquitetura Técnica**](docs/ARCHITECTURE.md): Diagramas do sistema, pipeline de áudio PCM, Chrome Built-in AI e motor i18n.
+- ⚙️ [**Variáveis de Ambiente**](docs/ENVIRONMENT_VARIABLES.md): Referência completa de configuração do `.env`.
+- 🎨 [**Brand Briefing**](BRAND_BRIEF.md): Guia de identidade visual, logotipo 3D, cores e tom de voz do Vocalis AI.
+- 📜 [**Licença Open-Source**](LICENSE): Texto oficial da licença GNU General Public License v2.0 (GPLv2).
+- 🏷️ [**Registro de Alterações**](CHANGELOG.md): Histórico de versão `v1.0.0`.
 
 ---
 

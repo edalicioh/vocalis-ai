@@ -1,5 +1,5 @@
 # ============================================================
-# Exemplo de variáveis de ambiente
+# Exemplo de variáveis de ambiente - Vocalis AI
 # Copie para .env e configure seus valores
 # ============================================================
 
@@ -10,7 +10,19 @@ GEMINI_API_KEY=sua_chave_api_aqui
 ORCHESTRATOR_PORT=3001
 WHISPER_PORT=8000
 
-# --- Whisper ---
+# --- Extension Client URLs (Vite) ---
+VITE_ORCHESTRATOR_WS_URL=ws://localhost:3001/ws
+VITE_ORCHESTRATOR_HTTP_URL=http://localhost:3001
+
+# --- Whisper & Orchestrator Services ---
+WHISPER_WS_URL=ws://localhost:8000/ws/transcribe
+
+# --- LLM Providers & Endpoints ---
+OLLAMA_ENDPOINT=http://localhost:11434
+CUSTOM_PROXY_ENDPOINT=https://api.deepseek.com/v1/chat/completions
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# --- Whisper Model ---
 # Modelos disponíveis: tiny, base, small, medium, large-v2, large-v3
 WHISPER_MODEL=small
 # Compute type: float16 (GPU), int8 (CPU), float32 (CPU lento)

@@ -89,6 +89,8 @@ export class ChromeBuiltInAIProcessor {
       }
     } catch (err) {
       console.warn('[ChromeBuiltInAIProcessor] Erro na correção de termo via Gemini Nano, usando bypass:', err);
+      // Reseta sessão morta para que a próxima chamada tente recriar
+      this.session = null;
     }
 
     return { text: rawText, corrected: false };
@@ -111,10 +113,11 @@ export class ChromeBuiltInAIProcessor {
     let category: string | undefined = undefined;
 
     if (shouldSummarize && this.isAvailable && this.utterancesBuffer.length > 0) {
+      let summarySession: any = null;
       try {
         const win = typeof globalThis !== 'undefined' ? (globalThis as any) : (window as any);
         if (win.ai?.languageModel) {
-          const summarySession = await win.ai.languageModel.create({
+          summarySession = await win.ai.languageModel.create({
             systemPrompt:
               'Você é um sintetizador de conversas de entrevistas técnicas. ' +
               'Resuma os tópicos técnicos discutidos em até 2 linhas e identifique a categoria principal (ex: DevOps, Backend, Frontend, System Design, General).'
@@ -130,12 +133,18 @@ export class ChromeBuiltInAIProcessor {
             this.lastSummaryTimestamp = now;
             this.utteranceCount = 0;
           }
-          if (typeof summarySession.destroy === 'function') {
-            summarySession.destroy();
-          }
         }
       } catch (err) {
         console.warn('[ChromeBuiltInAIProcessor] Erro na sumarização via Gemini Nano:', err);
+      } finally {
+        // Garante destruição da sessão temporária mesmo em caso de erro
+        if (summarySession && typeof summarySession.destroy === 'function') {
+          try {
+            summarySession.destroy();
+          } catch {
+            // Ignora erro no destroy
+          }
+        }
       }
     }
 

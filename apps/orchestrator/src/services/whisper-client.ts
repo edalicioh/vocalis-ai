@@ -24,7 +24,7 @@ export class WhisperClient {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect: boolean = true;
 
-  constructor(private url: string = 'ws://localhost:8000/ws/transcribe') {}
+  constructor(private url: string = process.env.WHISPER_WS_URL || 'ws://localhost:8000/ws/transcribe') {}
 
   public connect(onTranscription: TranscriptionCallback) {
     this.onTranscriptionCallback = onTranscription;

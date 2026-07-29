@@ -6,8 +6,10 @@ import {
   TtsMode,
   Settings,
   AIProvider,
-  MeetingMode
+  MeetingMode,
+  UiLanguage
 } from '@conversation-copilot/shared-types';
+import { t } from './i18n';
 
 type SettingsTab = 'api' | 'profile' | 'job' | 'modes';
 
@@ -31,6 +33,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   const [customProxyEndpoint, setCustomProxyEndpoint] = useState('https://api.deepseek.com/v1/chat/completions');
   const [customProxyApiKey, setCustomProxyApiKey] = useState('');
   const [customProxyModel, setCustomProxyModel] = useState('deepseek-chat');
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>('pt-BR');
 
   // Modelos carregados dinamicamente via API
   const [dynamicModels, setDynamicModels] = useState<Record<AIProvider, ModelOption[]>>({
@@ -59,7 +62,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
     }
 
     try {
-      const url = new URL('http://localhost:3001/api/models');
+      const httpBase = import.meta.env.VITE_ORCHESTRATOR_HTTP_URL || 'http://localhost:3001';
+      const url = new URL(`${httpBase.replace(/\/$/, '')}/api/models`);
       url.searchParams.append('provider', provider);
       if (apiKey) url.searchParams.append('apiKey', apiKey);
       if (endpoint) url.searchParams.append('endpoint', endpoint);
@@ -154,6 +158,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       if (res.jobNiceToHave) setJobNiceToHave(res.jobNiceToHave);
       if (res.jobTechnologies) setJobTechnologies(res.jobTechnologies);
       if (res.jobNotes) setJobNotes(res.jobNotes);
+      if (res.uiLanguage) setUiLanguage(res.uiLanguage);
       if (res.responseMode) setResponseMode(res.responseMode);
       if (res.ttsMode) setTtsMode(res.ttsMode);
       if (res.ttsSpeed) setTtsSpeed(res.ttsSpeed);
@@ -209,7 +214,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       ttsAutoPlay: ttsMode !== 'off' && ttsMode !== 'manual',
       autoTrigger: true,
       userProfile,
-      jobDescription: job
+      jobDescription: job,
+      uiLanguage
     };
   };
 
@@ -219,6 +225,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
     try {
       localStorage.setItem('copilotMeetingMode', meetingMode);
       localStorage.setItem('copilotModeNotes', JSON.stringify(modeNotes));
+      localStorage.setItem('copilotUiLanguage', uiLanguage);
     } catch (e) {}
 
     chrome.storage.local.set({
@@ -227,7 +234,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       name, role, seniority, skills, experiences, projects,
       strengths, weaknesses, jobTitle, jobCompany, jobDescription,
       jobRequirements, jobNiceToHave, jobTechnologies, jobNotes,
-      responseMode, ttsMode, ttsSpeed, ttsVolume
+      responseMode, ttsMode, ttsSpeed, ttsVolume, uiLanguage
     }, () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -235,7 +242,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
 
     chrome.runtime.sendMessage({ type: 'SET_RMS_THRESHOLD', rmsThreshold }).catch(() => {});
 
-    const ws = new WebSocket('ws://localhost:3001/ws');
+    const wsUrl = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
+    const ws = new WebSocket(wsUrl);
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'settings.update', payload }));
       setTimeout(() => ws.close(), 500);
@@ -268,7 +276,19 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
         {activeTab === 'api' && (
           <>
             <div style={fieldGroupStyle}>
-              <label style={labelStyle}>Provedor de IA Ativo</label>
+              <label style={labelStyle}>🌐 {t('settings.language', uiLanguage)}</label>
+              <select
+                value={uiLanguage}
+                onChange={e => setUiLanguage(e.target.value as UiLanguage)}
+                style={inputStyle}
+              >
+                <option value="pt-BR">🇧🇷 Português (Brasil)</option>
+                <option value="en">🇺🇸 English</option>
+              </select>
+            </div>
+
+            <div style={fieldGroupStyle}>
+              <label style={labelStyle}>{t('settings.provider', uiLanguage)}</label>
               <select
                 value={aiProvider}
                 onChange={e => setAiProvider(e.target.value as AIProvider)}

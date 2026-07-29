@@ -20,7 +20,8 @@ import {
   FileText
 } from 'lucide-react';
 import { WidgetPosition, HUDLayoutMode } from '../widget-state';
-import { StatusUpdatePayload, ConversationTone, MeetingMode } from '@conversation-copilot/shared-types';
+import { StatusUpdatePayload, ConversationTone, MeetingMode, UiLanguage } from '@conversation-copilot/shared-types';
+import { t } from '../../shared/i18n';
 
 /** Mapa de cores por tom de conversa */
 const TONE_COLORS: Record<ConversationTone, { bg: string; text: string; label: string }> = {
@@ -67,6 +68,7 @@ interface FunctionBarWidgetProps {
   meetingMode?: MeetingMode;
   onChangeMeetingMode?: (mode: MeetingMode) => void;
   isAudioActive?: boolean;
+  uiLanguage?: UiLanguage;
 }
 
 export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
@@ -94,7 +96,8 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
   toneSummary = '',
   meetingMode = 'technical_interview',
   onChangeMeetingMode,
-  isAudioActive = false
+  isAudioActive = false,
+  uiLanguage = 'pt-BR'
 }) => {
   const [openMenu, setOpenMenu] = useState<'status' | 'mode' | 'audio' | 'visual' | 'more' | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);

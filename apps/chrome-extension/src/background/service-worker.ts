@@ -43,6 +43,16 @@ async function setupOffscreenDocument(path: string) {
 }
 
 /**
+ * Envia mensagem ao offscreen de forma segura, suprimindo erro quando o
+ * documento ainda não registrou listeners ou já foi encerrado.
+ */
+function sendMessageSafe(msg: Record<string, unknown>): Promise<void> {
+  return chrome.runtime.sendMessage(msg).catch(() => {
+    // Ignora: offscreen document pode não existir ou não ter listener registrado
+  });
+}
+
+/**
  * Remove o offscreen document para liberar recursos (RF-002).
  */
 async function closeOffscreenDocument() {
@@ -120,7 +130,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const offscreenUrl = chrome.runtime.getURL('src/offscreen/offscreen.html');
         await setupOffscreenDocument(offscreenUrl);
 
-        chrome.runtime.sendMessage({
+        await sendMessageSafe({
           type: 'INIT_AUDIO_CAPTURE',
           streamId,
           sessionId
@@ -158,9 +168,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         // 1. Para a captura de áudio no offscreen
-        chrome.runtime.sendMessage({ type: 'STOP_AUDIO_CAPTURE' });
+        await sendMessageSafe({ type: 'STOP_AUDIO_CAPTURE' });
 
-        // 2. Fecha o offscreen document para liberar recursos
+        // 2. Aguarda processamento da mensagem antes de fechar o documento
+        await new Promise(r => setTimeout(r, 150));
+
+        // 3. Fecha o offscreen document para liberar recursos
         await closeOffscreenDocument();
 
         if (targetTabId) {

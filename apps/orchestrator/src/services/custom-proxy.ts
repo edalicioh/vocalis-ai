@@ -6,18 +6,19 @@ import { AnswerProvider, AnswerInput, AnswerEvent } from './answer-provider.js';
  * de API Chat Completions da OpenAI (ex: DeepSeek, Groq, OpenRouter, Mistral, LM Studio, vLLM).
  */
 export class CustomProxyProvider implements AnswerProvider {
-  private endpoint: string = 'https://api.deepseek.com/v1/chat/completions';
+  private endpoint: string = process.env.CUSTOM_PROXY_ENDPOINT || 'https://api.deepseek.com/v1/chat/completions';
   private apiKey: string = '';
   private model: string = 'deepseek-chat';
 
   public setEndpoint(endpoint: string) {
+    const defaultEndpoint = process.env.CUSTOM_PROXY_ENDPOINT || 'https://api.deepseek.com/v1/chat/completions';
     let trimmed = endpoint.trim();
     if (trimmed && !trimmed.endsWith('/chat/completions')) {
       trimmed = trimmed.replace(/\/+$/, '') + '/v1/chat/completions';
       // Ajusta se já tiver /v1
       trimmed = trimmed.replace(/\/v1\/v1\//, '/v1/');
     }
-    this.endpoint = trimmed || 'https://api.deepseek.com/v1/chat/completions';
+    this.endpoint = trimmed || defaultEndpoint;
   }
 
   public setApiKey(apiKey: string) {

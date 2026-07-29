@@ -1,11 +1,12 @@
 import { AnswerProvider, AnswerInput, AnswerEvent } from './answer-provider.js';
 
 export class OllamaProvider implements AnswerProvider {
-  private endpoint: string = 'http://localhost:11434';
+  private endpoint: string = process.env.OLLAMA_ENDPOINT || 'http://localhost:11434';
   private model: string = 'llama3';
 
   public setEndpoint(endpoint: string) {
-    this.endpoint = endpoint ? endpoint.replace(/\/$/, '') : 'http://localhost:11434';
+    const defaultEndpoint = process.env.OLLAMA_ENDPOINT || 'http://localhost:11434';
+    this.endpoint = endpoint ? endpoint.replace(/\/$/, '') : defaultEndpoint;
   }
 
   public setModel(model: string) {

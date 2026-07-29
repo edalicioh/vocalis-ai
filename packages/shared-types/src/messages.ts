@@ -112,6 +112,7 @@ export type PanelMode = 'compact' | 'normal' | 'keywords-only' | 'transcription-
 // ============================================================
 
 export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama' | 'custom_proxy';
+export type UiLanguage = 'pt-BR' | 'en';
 
 export interface Settings {
   /** Provedor de IA ativo */
@@ -160,6 +161,8 @@ export interface Settings {
   userProfile: UserProfile;
   /** Descrição da vaga */
   jobDescription: JobDescription;
+  /** Idioma da interface (padrão: pt-BR) */
+  uiLanguage?: UiLanguage;
 }
 
 // ============================================================

@@ -1,0 +1,56 @@
+import { Translations } from './types';
+
+export const ptBR: Translations = {
+  appName: 'Vocalis AI',
+  tagline: 'Inteligência de voz em tempo real para reuniões e entrevistas',
+  // HUD Bar
+  'hud.vadActive': 'Fala Ativa',
+  'hud.vadSilent': 'Silêncio',
+  'hud.listening': 'Ouvindo áudio...',
+  'hud.paused': 'Pausado',
+  'hud.mode': 'Modo de Reunião',
+  'hud.clear': 'Limpar Tela',
+  'hud.settings': 'Configurações',
+  'hud.opacity': 'Opacidade',
+  // Response Panel
+  'panel.title': 'Sugestão da IA',
+  'panel.copy': 'Copiar',
+  'panel.copied': 'Copiado! ✓',
+  'panel.shorten': 'Encurtar',
+  'panel.formal': 'Formal',
+  'panel.technical': 'Técnico',
+  'panel.expand': 'Expandir',
+  'panel.undo': 'Desfazer',
+  'panel.rewriting': 'Reescrevendo...',
+  'panel.noSuggestions': 'Aguardando perguntas na chamada...',
+  'panel.waitingQuestion': 'Perguntas detectadas aparecerão aqui automaticamente.',
+  // Settings Tabs & Labels
+  'settings.tabGeneral': 'Geral',
+  'settings.tabAi': 'Provedores de IA',
+  'settings.tabModes': 'Modos de Reunião',
+  'settings.tabProfile': 'Perfil Profissional',
+  'settings.tabInterface': 'Interface & Idioma',
+  'settings.language': 'Idioma da Interface',
+  'settings.save': 'Salvar Configurações',
+  'settings.saved': 'Salvo com sucesso! ✓',
+  'settings.saving': 'Salvando...',
+  'settings.provider': 'Provedor de IA',
+  'settings.apiKey': 'Chave de API',
+  'settings.model': 'Modelo de IA',
+  'settings.endpoint': 'Endpoint da API',
+  'settings.testConnection': 'Testar Conexão',
+  'settings.connectionOk': 'Conexão OK! ✓',
+  'settings.connectionFailed': 'Falha na conexão',
+  // Modes
+  'mode.technical_interview': 'Entrevista Técnica',
+  'mode.system_design': 'System Design',
+  'mode.code_review': 'Code Review',
+  'mode.general': 'Geral / Livre',
+  // Popup
+  'popup.statusConnected': 'Conectado ao Orquestrador',
+  'popup.statusDisconnected': 'Desconectado',
+  'popup.startSession': 'Iniciar Captura',
+  'popup.stopSession': 'Parar Captura',
+  'popup.openOptions': 'Abrir Opções',
+  'popup.history': 'Histórico de Conversas'
+};

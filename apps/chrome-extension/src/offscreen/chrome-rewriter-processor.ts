@@ -1,6 +1,34 @@
 export type RewriteStyle = 'shorten' | 'formal' | 'technical' | 'expand';
 
 export class ChromeRewriterProcessor {
+  private promptApiAvailable: boolean | null = null;
+
+  /**
+   * Verifica se a Prompt API do Gemini Nano está disponível e pronta para uso
+   */
+  private async checkPromptApiAvailability(): Promise<boolean> {
+    if (this.promptApiAvailable !== null) {
+      return this.promptApiAvailable;
+    }
+
+    try {
+      const win = (typeof globalThis !== 'undefined' ? (globalThis as any) : null) ||
+        (typeof window !== 'undefined' ? (window as any) : null);
+      const ai = win?.ai || (win?.window && win.window.ai);
+
+      if (ai?.languageModel?.capabilities) {
+        const caps = await ai.languageModel.capabilities();
+        this.promptApiAvailable = caps.available === 'readily';
+      } else {
+        this.promptApiAvailable = false;
+      }
+    } catch {
+      this.promptApiAvailable = false;
+    }
+
+    return this.promptApiAvailable;
+  }
+
   /**
    * Reescreve um texto utilizando a Rewriter API ou a Prompt API (fallback) do Gemini Nano no Chrome
    */
@@ -40,6 +68,13 @@ export class ChromeRewriterProcessor {
     }
 
     // 2. Fallback para a Prompt API local (window.ai.languageModel) no Gemini Nano
+    //    Verifica se o modelo está realmente pronto antes de criar sessão
+    const isPromptReady = await this.checkPromptApiAvailability();
+    if (!isPromptReady) {
+      return { rewrittenText: text, success: false };
+    }
+
+    let session: any = null;
     try {
       if (ai.languageModel && typeof ai.languageModel.create === 'function') {
         const promptsMap: Record<RewriteStyle, string> = {
@@ -49,16 +84,12 @@ export class ChromeRewriterProcessor {
           expand: 'Reescreva a resposta a seguir adicionando detalhes explicativos, exemplos práticos e contexto:'
         };
 
-        const session = await ai.languageModel.create({
+        session = await ai.languageModel.create({
           systemPrompt: 'Você é um assistente especialista em reescrita e refinamento de texto para entrevistas técnicas. Retorne APENAS o texto reescrito sem introduções ou explicações adicionais.'
         });
 
         const prompt = `${promptsMap[style] || promptsMap.shorten}\n\n"${text}"`;
         const result = await session.prompt(prompt);
-
-        if (typeof session.destroy === 'function') {
-          session.destroy();
-        }
 
         if (result && result.trim()) {
           return { rewrittenText: result.trim(), success: true };
@@ -66,6 +97,17 @@ export class ChromeRewriterProcessor {
       }
     } catch (err) {
       console.warn('[ChromeRewriterProcessor] Erro no fallback para Prompt API:', err);
+      // Invalida cache para re-checar disponibilidade na próxima chamada
+      this.promptApiAvailable = null;
+    } finally {
+      // Garante destruição da sessão mesmo em caso de erro
+      if (session && typeof session.destroy === 'function') {
+        try {
+          session.destroy();
+        } catch {
+          // Ignora erro no destroy
+        }
+      }
     }
 
     return { rewrittenText: text, success: false };

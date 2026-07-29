@@ -1,0 +1,56 @@
+import { Translations } from './types';
+
+export const en: Translations = {
+  appName: 'Vocalis AI',
+  tagline: 'Real-time voice intelligence for meetings and interviews',
+  // HUD Bar
+  'hud.vadActive': 'Active Speech',
+  'hud.vadSilent': 'Silent',
+  'hud.listening': 'Listening to audio...',
+  'hud.paused': 'Paused',
+  'hud.mode': 'Meeting Mode',
+  'hud.clear': 'Clear Panel',
+  'hud.settings': 'Settings',
+  'hud.opacity': 'Opacity',
+  // Response Panel
+  'panel.title': 'AI Suggestion',
+  'panel.copy': 'Copy',
+  'panel.copied': 'Copied! ✓',
+  'panel.shorten': 'Shorten',
+  'panel.formal': 'Formal',
+  'panel.technical': 'Technical',
+  'panel.expand': 'Expand',
+  'panel.undo': 'Undo',
+  'panel.rewriting': 'Rewriting...',
+  'panel.noSuggestions': 'Waiting for questions in call...',
+  'panel.waitingQuestion': 'Detected questions will automatically appear here.',
+  // Settings Tabs & Labels
+  'settings.tabGeneral': 'General',
+  'settings.tabAi': 'AI Providers',
+  'settings.tabModes': 'Meeting Modes',
+  'settings.tabProfile': 'Professional Profile',
+  'settings.tabInterface': 'Interface & Language',
+  'settings.language': 'Interface Language',
+  'settings.save': 'Save Settings',
+  'settings.saved': 'Saved successfully! ✓',
+  'settings.saving': 'Saving...',
+  'settings.provider': 'AI Provider',
+  'settings.apiKey': 'API Key',
+  'settings.model': 'AI Model',
+  'settings.endpoint': 'API Endpoint',
+  'settings.testConnection': 'Test Connection',
+  'settings.connectionOk': 'Connection OK! ✓',
+  'settings.connectionFailed': 'Connection failed',
+  // Modes
+  'mode.technical_interview': 'Technical Interview',
+  'mode.system_design': 'System Design',
+  'mode.code_review': 'Code Review',
+  'mode.general': 'General / Freeform',
+  // Popup
+  'popup.statusConnected': 'Connected to Orchestrator',
+  'popup.statusDisconnected': 'Disconnected',
+  'popup.startSession': 'Start Capture',
+  'popup.stopSession': 'Stop Capture',
+  'popup.openOptions': 'Open Options',
+  'popup.history': 'Conversation History'
+};

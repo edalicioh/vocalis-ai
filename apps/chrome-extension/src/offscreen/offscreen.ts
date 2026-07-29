@@ -19,7 +19,8 @@ function connectWebSocket() {
     return;
   }
 
-  ws = new WebSocket('ws://localhost:3001/ws');
+  const wsUrl = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
+  ws = new WebSocket(wsUrl);
   ws.binaryType = 'arraybuffer';
 
   ws.onopen = async () => {

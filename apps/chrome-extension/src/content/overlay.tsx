@@ -14,7 +14,8 @@ import {
   SavedConversation,
   ToneUpdatePayload,
   ConversationTone,
-  MeetingMode
+  MeetingMode,
+  UiLanguage
 } from '@conversation-copilot/shared-types';
 import { saveConversation, triggerMarkdownDownload } from '../shared/conversation-storage';
 import {
@@ -76,9 +77,13 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
   const [toneConfidence, setToneConfidence] = useState<number>(0.5);
   const [toneSummary, setToneSummary] = useState<string>('');
 
-  // --- Modo de Reunião ---
+  // --- Modo de Reunião e Idioma ---
   const [meetingMode, setMeetingMode] = useState<MeetingMode>(() => {
     return (localStorage.getItem('copilotMeetingMode') as MeetingMode) || 'technical_interview';
+  });
+
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>(() => {
+    return (localStorage.getItem('copilotUiLanguage') as UiLanguage) || 'pt-BR';
   });
 
   const [isAudioActive, setIsAudioActive] = useState(false);
@@ -277,7 +282,8 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
   };
 
   const connectWebSocket = () => {
-    const ws = new WebSocket('ws://localhost:3001/ws');
+    const wsUrl = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -541,6 +547,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
           meetingMode={meetingMode}
           onChangeMeetingMode={handleChangeMeetingMode}
           isAudioActive={isAudioActive}
+          uiLanguage={uiLanguage}
         />
       )}
 
@@ -588,6 +595,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
           onStopSpeech={handleStopSpeech}
           activeSentenceIndex={activeSentenceIndex}
           opacity={opacity}
+          uiLanguage={uiLanguage}
         />
       )}
 

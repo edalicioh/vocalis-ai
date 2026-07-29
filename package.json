@@ -1,8 +1,9 @@
 {
-  "name": "conversation-copilot-monorepo",
+  "name": "vocalis-ai-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "Copiloto de Conversas e Entrevistas Técnicas",
+  "license": "GPL-2.0-only",
+  "description": "Vocalis AI — Copiloto de Conversas e Entrevistas Técnicas em Tempo Real",
   "workspaces": [
     "packages/*",
     "apps/*"

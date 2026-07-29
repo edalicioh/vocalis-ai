@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { GripVertical, Minus, X, Volume2, Pause, Copy, Check, Sparkles, HelpCircle, Tag } from 'lucide-react';
-import { Suggestion, QuestionDetectionResult } from '@conversation-copilot/shared-types';
+import { Suggestion, QuestionDetectionResult, UiLanguage } from '@conversation-copilot/shared-types';
 import { WidgetDimensions, WidgetPosition } from '../widget-state';
+import { t } from '../../shared/i18n';
 
 interface ResponsePanelWidgetProps {
   position: WidgetPosition;
@@ -20,6 +21,7 @@ interface ResponsePanelWidgetProps {
   onStopSpeech: () => void;
   activeSentenceIndex: number | null;
   opacity: number;
+  uiLanguage?: UiLanguage;
 }
 
 export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
@@ -38,7 +40,8 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
   isSpeaking,
   onStopSpeech,
   activeSentenceIndex,
-  opacity
+  opacity,
+  uiLanguage = 'pt-BR'
 }) => {
   const [copied, setCopied] = useState(false);
   const [originalText, setOriginalText] = useState<string | null>(null);
@@ -231,7 +234,7 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
             </span>
             <Sparkles size={14} color="#818cf8" />
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.3px' }}>
-              Painel de Resposta
+              {t('panel.title', uiLanguage)}
             </span>
           </div>
 
@@ -412,7 +415,7 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
                       }}
                       title="Tornar resposta extremamente curta e direta"
                     >
-                      ✂️ Encurtar
+                      ✂️ {t('panel.shorten', uiLanguage)}
                     </button>
                     <button
                       onClick={() => handleRewrite('formal')}
@@ -428,7 +431,7 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
                       }}
                       title="Reescrever em tom formal e corporativo"
                     >
-                      💼 Formal
+                      💼 {t('panel.formal', uiLanguage)}
                     </button>
                     <button
                       onClick={() => handleRewrite('technical')}
@@ -444,7 +447,7 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
                       }}
                       title="Enfatizar termos técnicos e arquitetura"
                     >
-                      💻 Técnico
+                      💻 {t('panel.technical', uiLanguage)}
                     </button>
                     <button
                       onClick={() => handleRewrite('expand')}
@@ -460,7 +463,7 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
                       }}
                       title="Detalhar a resposta com mais explicações"
                     >
-                      📝 Expandir
+                      📝 {t('panel.expand', uiLanguage)}
                     </button>
                     {overrideText && (
                       <button
@@ -518,7 +521,7 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
                     }}
                   >
                     {copied ? <Check size={12} /> : <Copy size={12} />}
-                    <span>{copied ? 'Copiado! ✓' : 'Copiar'}</span>
+                    <span>{copied ? t('panel.copied', uiLanguage) : t('panel.copy', uiLanguage)}</span>
                   </button>
 
                   <button
