@@ -186,6 +186,180 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
           response: { visible: true, minimized: false },
           transcription: { visible: false, minimized: false }
         };
+  SavedConversation,
+  ToneUpdatePayload,
+  ConversationTone,
+  MeetingMode,
+  UiLanguage
+} from '@conversation-copilot/shared-types';
+import { saveConversation, triggerMarkdownDownload } from '../shared/conversation-storage';
+import {
+  WidgetId,
+  WidgetDimensions,
+  WidgetDimensionsMap,
+  WidgetPositionsMap,
+  WidgetStatesMap,
+  HUDLayoutMode,
+  loadWidgetPositions,
+  saveWidgetPositions,
+  loadWidgetDimensions,
+  saveWidgetDimensions,
+  loadWidgetStates,
+  saveWidgetStates,
+  loadHUDLayoutMode,
+  saveHUDLayoutMode,
+  loadOpacity,
+  saveOpacity
+} from './widget-state';
+import { FunctionBarWidget } from './widgets/FunctionBarWidget';
+import { ResponsePanelWidget } from './widgets/ResponsePanelWidget';
+import { TranscriptionWidget } from './widgets/TranscriptionWidget';
+
+const speechManager = new SpeechManager();
+
+interface CopilotOverlayProps {
+  tabSessionId: string;
+}
+
+export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) => {
+
+  // --- Estados e Posições dos Widgets HUD ---
+  const [widgetPositions, setWidgetPositions] = useState<WidgetPositionsMap>(loadWidgetPositions);
+  const [widgetDimensions, setWidgetDimensions] = useState<WidgetDimensionsMap>(loadWidgetDimensions);
+  const [widgetStates, setWidgetStates] = useState<WidgetStatesMap>(loadWidgetStates);
+  const [hudLayoutMode, setHudLayoutMode] = useState<HUDLayoutMode>(loadHUDLayoutMode);
+
+  // --- Modal de Configurações ---
+  const [showSettings, setShowSettings] = useState(false);
+  const [opacity, setOpacity] = useState<number>(loadOpacity);
+
+  // --- Transcrição, Pergunta e Sugestões ---
+  const [status, setStatus] = useState<StatusUpdatePayload>({
+    whisperConnected: false,
+    llmConfigured: false,
+    isCapturing: false
+  });
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [transcriptions, setTranscriptions] = useState<Utterance[]>([]);
+  const [partialTranscript, setPartialTranscript] = useState<string>('');
+  const [completedSuggestions, setCompletedSuggestions] = useState<Suggestion[]>([]);
+  const [activeSuggestion, setActiveSuggestion] = useState<Suggestion | null>(null);
+  const [detectedQuestion, setDetectedQuestion] = useState<QuestionDetectionResult | null>(null);
+
+  // --- Tom da Conversa ---
+  const [tone, setTone] = useState<ConversationTone>('neutro');
+  const [toneConfidence, setToneConfidence] = useState<number>(0.5);
+  const [toneSummary, setToneSummary] = useState<string>('');
+
+  // --- Modo de Reunião e Idioma ---
+  const [meetingMode, setMeetingMode] = useState<MeetingMode>(() => {
+    return (localStorage.getItem('copilotMeetingMode') as MeetingMode) || 'technical_interview';
+  });
+
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>(() => {
+    return (localStorage.getItem('copilotUiLanguage') as UiLanguage) || 'pt-BR';
+  });
+
+  const [isAudioActive, setIsAudioActive] = useState(false);
+
+  const handleChangeMeetingMode = (newMode: MeetingMode) => {
+    setMeetingMode(newMode);
+    localStorage.setItem('copilotMeetingMode', newMode);
+    const storedNotes = localStorage.getItem('copilotModeNotes');
+    let modeNotes = {};
+    if (storedNotes) {
+      try { modeNotes = JSON.parse(storedNotes); } catch (e) {}
+    }
+    sendWsMessage({
+      type: 'settings.update',
+      payload: { meetingMode: newMode, modeNotes }
+    });
+  };
+
+  // --- TTS State ---
+  const [isTtsMuted, setIsTtsMuted] = useState(false);
+  const [ttsRate, setTtsRate] = useState(1.0);
+  const [isTtsSpeaking, setIsTtsSpeaking] = useState(false);
+  const [activeSentenceIndex, setActiveSentenceIndex] = useState<number | null>(null);
+
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // ========= Handlers de Posição e Estado =========
+
+  const updateWidgetPosition = (id: WidgetId, pos: { x: number; y: number }) => {
+    setWidgetPositions(prev => {
+      const next = { ...prev, [id]: pos };
+      saveWidgetPositions(next);
+      return next;
+    });
+  };
+
+  const updateWidgetDimensions = (id: WidgetId, dimensions: WidgetDimensions) => {
+    setWidgetDimensions(prev => {
+      const next = { ...prev, [id]: dimensions };
+      saveWidgetDimensions(next);
+      return next;
+    });
+  };
+
+  const updateWidgetVisibility = (id: WidgetId, visible: boolean) => {
+    setWidgetStates(prev => {
+      const next = { ...prev, [id]: { ...prev[id], visible } };
+      saveWidgetStates(next);
+      return next;
+    });
+  };
+
+  const toggleWidgetMinimized = (id: WidgetId) => {
+    setWidgetStates(prev => {
+      const next = { ...prev, [id]: { ...prev[id], minimized: !prev[id].minimized } };
+      saveWidgetStates(next);
+      return next;
+    });
+  };
+
+  const handleChangeHudMode = (mode: HUDLayoutMode) => {
+    setHudLayoutMode(mode);
+    saveHUDLayoutMode(mode);
+
+    if (mode === 'default') {
+      setWidgetStates(prev => {
+        const next = {
+          ...prev,
+          response: { visible: true, minimized: false },
+          transcription: { visible: true, minimized: false }
+        };
+        saveWidgetStates(next);
+        return next;
+      });
+    } else if (mode === 'compact') {
+      setWidgetStates(prev => {
+        const next = {
+          ...prev,
+          response: { visible: true, minimized: true },
+          transcription: { visible: false, minimized: false }
+        };
+        saveWidgetStates(next);
+        return next;
+      });
+    } else if (mode === 'reading') {
+      setWidgetStates(prev => {
+        const next = {
+          ...prev,
+          response: { visible: true, minimized: false },
+          transcription: { visible: true, minimized: false }
+        };
+        saveWidgetStates(next);
+        return next;
+      });
+    } else if (mode === 'keywords') {
+      setWidgetStates(prev => {
+        const next = {
+          ...prev,
+          response: { visible: true, minimized: false },
+          transcription: { visible: false, minimized: false }
+        };
         saveWidgetStates(next);
         return next;
       });
@@ -196,7 +370,13 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
 
   useEffect(() => {
     connectWebSocket();
-    chrome.runtime.sendMessage({ type: 'REGISTER_TAB_SESSION', sessionId: tabSessionId });
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
+        chrome.runtime.sendMessage({ type: 'REGISTER_TAB_SESSION', sessionId: tabSessionId }).catch(() => {});
+      }
+    } catch {
+      // Ignorar se o contexto da extensão foi invalidado ao recarregar
+    }
 
     speechManager.setOnSentenceStart((index) => {
       setActiveSentenceIndex(index);
@@ -239,10 +419,9 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
         setWidgetStates(prev => {
           const anyVisible = prev.response.visible || prev.transcription.visible;
           const next = {
-            status: { visible: false, minimized: false },
-            functionBar: { visible: true, minimized: false },
-            response: { visible: !anyVisible, minimized: false },
-            transcription: { visible: !anyVisible, minimized: false }
+            ...prev,
+            response: { ...prev.response, visible: !anyVisible },
+            transcription: { ...prev.transcription, visible: !anyVisible }
           };
           saveWidgetStates(next);
           return next;
@@ -262,73 +441,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
         sendWsMessage({ type: 'settings.update', payload: msg.payload });
       }
     };
-    chrome.runtime.onMessage.addListener(handleRuntimeMessage);
-
-    window.addEventListener('copilot:force-trigger', handleForceTrigger);
-    window.addEventListener('copilot:capture-state-changed', handleCaptureStateChange);
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      wsRef.current?.close();
-      speechManager.cancel();
-      chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
-      window.removeEventListener('copilot:force-trigger', handleForceTrigger);
-      window.removeEventListener('copilot:capture-state-changed', handleCaptureStateChange);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
-  const sendWsMessage = (msg: any) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ ...msg, sessionId: tabSessionId }));
     }
-  };
-
-  const connectWebSocket = () => {
-    const wsUrl = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'session.register', sessionId: tabSessionId, payload: {} }));
-      chrome.storage.local.get([
-        'aiProvider', 'geminiApiKey', 'geminiModel', 'openaiApiKey', 'openaiModel', 'anthropicApiKey', 'anthropicModel',
-        'ollamaEndpoint', 'ollamaModel', 'customProxyEndpoint', 'customProxyApiKey', 'customProxyModel',
-        'meetingMode', 'conversationAnalysisMode', 'responseMode', 'name', 'role', 'seniority', 'skills', 'experiences'
-      ], (stored) => {
-        if (ws.readyState !== WebSocket.OPEN) return;
-        ws.send(JSON.stringify({
-          type: 'settings.update',
-          sessionId: tabSessionId,
-          payload: {
-            aiProvider: stored.aiProvider || 'gemini',
-            geminiApiKey: stored.geminiApiKey,
-            geminiModel: stored.geminiModel,
-            openaiApiKey: stored.openaiApiKey,
-            openaiModel: stored.openaiModel,
-            anthropicApiKey: stored.anthropicApiKey,
-            anthropicModel: stored.anthropicModel,
-            ollamaEndpoint: stored.ollamaEndpoint,
-            ollamaModel: stored.ollamaModel,
-            customProxyEndpoint: stored.customProxyEndpoint,
-            customProxyApiKey: stored.customProxyApiKey,
-            customProxyModel: stored.customProxyModel,
-            meetingMode: stored.meetingMode,
-            conversationAnalysisMode: stored.conversationAnalysisMode === 'hybrid' ? 'hybrid' : 'local',
-            responseMode: stored.responseMode,
-            userProfile: {
-              name: stored.name,
-              role: stored.role,
-              seniority: stored.seniority,
-              skills: stored.skills ? String(stored.skills).split(',').map(s => s.trim()) : [],
-              experiences: stored.experiences ? String(stored.experiences).split(';').map(s => s.trim()) : []
-            }
-          }
-        }));
-      });
-    };
-
-    ws.onmessage = (event) => {
       try {
         const msg: WSMessage = JSON.parse(event.data);
         handleMessage(msg);
