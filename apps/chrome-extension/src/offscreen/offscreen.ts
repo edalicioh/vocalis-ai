@@ -115,7 +115,7 @@ async function startCapture(streamId: string, initialRmsThreshold?: number) {
     } catch (micErr: any) {
       const errName = micErr?.name || 'DOMException';
       const errMsg = micErr?.message || String(micErr);
-      console.warn(`[Offscreen] Microfone local indisponível ou permissão negada (${errName}: ${errMsg}). Continuando apenas com o áudio da aba.`);
+      console.info(`[Offscreen] Microfone local indisponível ou permissão negada (${errName}: ${errMsg}). Continuando apenas com o áudio da aba.`);
     }
 
     // 3. Criar AudioContext configurado em 16kHz
