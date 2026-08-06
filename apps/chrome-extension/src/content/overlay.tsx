@@ -61,8 +61,8 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
 
   // --- Transcrição, Pergunta e Sugestões ---
   const [status, setStatus] = useState<StatusUpdatePayload>({
-    whisperConnected: false,
-    llmConfigured: false,
+    whisperConnected: true,
+    llmConfigured: true,
     isCapturing: false
   });
   const [isCapturing, setIsCapturing] = useState(false);
@@ -468,6 +468,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
       }
 
       case 'transcript.partial': {
+        setStatus(prev => ({ ...prev, whisperConnected: true }));
         const p = msg.payload as any;
         const text = typeof p === 'string' ? p : (p?.text || p?.utterance || '');
         if (text) {
@@ -479,6 +480,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
 
       case 'transcript.final':
       case 'TRANSCRIPTION_DELTA' as any: {
+        setStatus(prev => ({ ...prev, whisperConnected: true }));
         const p = msg.payload as any;
         setPartialTranscript('');
         if (p) {
