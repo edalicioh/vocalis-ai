@@ -6,7 +6,7 @@
 
 🌐 **[Português (Brasil)](README.md)** | **[English](README.en.md)**
 
-[![Versão](https://img.shields.io/badge/vers%C3%A3o-v1.0.0-blue.svg)](CHANGELOG.md)
+[![Versão](https://img.shields.io/badge/vers%C3%A3o-v1.1.0-blue.svg)](CHANGELOG.md)
 [![Licença](https://img.shields.io/badge/licen%C3%A7a-GPL--2.0-green.svg)](LICENSE)
 [![Brand Brief](https://img.shields.io/badge/marca-Brand%20Brief-purple.svg)](BRAND_BRIEF.md)
 [![Documentação](https://img.shields.io/badge/docs-Documenta%C3%A7%C3%A3o-orange.svg)](docs/USER_GUIDE.md)
@@ -22,7 +22,7 @@ Assistente em tempo real que transcreve reuniões, detecta perguntas e sugere re
 - ⚙️ [**Variáveis de Ambiente**](docs/ENVIRONMENT_VARIABLES.md): Referência completa de configuração do `.env`.
 - 🎨 [**Brand Briefing**](BRAND_BRIEF.md): Guia de identidade visual, logotipo 3D, cores e tom de voz do Vocalis AI.
 - 📜 [**Licença Open-Source**](LICENSE): Texto oficial da licença GNU General Public License v2.0 (GPLv2).
-- 🏷️ [**Registro de Alterações**](CHANGELOG.md): Histórico de versão `v1.0.0`.
+- 🏷️ [**Registro de Alterações**](CHANGELOG.md): Histórico de versão `v1.1.0`.
 
 ---
 
@@ -45,15 +45,17 @@ Assistente em tempo real que transcreve reuniões, detecta perguntas e sugere re
 
 ## Visão Geral
 
-O sistema captura o áudio de uma reunião no Chrome, filtra o silêncio localmente via RMS Energy Gate, transcreve com faster-whisper + Silero VAD, pré-processa jargões técnicos via **Chrome Built-in AI (Gemini Nano on-device)**, detecta perguntas automaticamente e gera sugestões contextuais adaptadas ao modo de reunião ativo — exibidas em um painel flutuante sobre a reunião com opção de reescrita instantânea local.
+O sistema captura o áudio de uma reunião no Chrome, filtra o silêncio localmente via RMS Energy Gate, transcreve com faster-whisper + Silero VAD, orquestra no próprio navegador (QuestionDetector, ContextManager, AgentRouter e LlmProvider), pré-processa jargões técnicos via **Chrome Built-in AI (Gemini Nano on-device)**, detecta perguntas automaticamente e gera sugestões contextuais adaptadas ao modo de reunião ativo — exibidas em um painel flutuante sobre a reunião com opção de reescrita instantânea local.
 
 ```
-Chrome (Meet/Teams) → Extensão Chrome (Shadow DOM + Gemini Nano Local) → WebSocket → Orquestrador Node.js
-                                                                                        ├── Whisper (Silero VAD)
-                                                                                        └── LLM (Gemini / Claude / Ollama)
+Chrome (Meet/Teams) ── Extensão Chrome (Orquestrador Principal)
+                             ├── Offscreen (Áudio PCM 16kHz) ── WebSocket ── Whisper Local (Silero VAD)
+                             ├── QuestionDetector & ContextManager
+                             ├── AgentRouter (Interview / Rewrite / Summary)
+                             └── LlmProvider (Gemini / OpenAI / Ollama / Chrome AI)
 ```
 
-**Prioridades**: baixa latência (<3s), privacidade (áudio e pré-processamento local), otimização de banda/CPU (VAD RMS), respostas curtas e adaptativas.
+**Prioridades**: baixa latência (<2s), privacidade (áudio e processamento local), otimização de banda/CPU (VAD RMS), respostas curtas e adaptativas.
 
 ---
 
@@ -61,11 +63,11 @@ Chrome (Meet/Teams) → Extensão Chrome (Shadow DOM + Gemini Nano Local) → We
 
 | Componente | Tecnologia | Porta | Descrição |
 | :--- | :--- | :---: | :--- |
-| **Extensão Chrome** | React + TypeScript + Manifest V3 | — | Captura áudio PCM 16kHz, HUD em Shadow DOM, TTS, E2E Playwright |
-| **Chrome AI (Gemini Nano)** | Prompt API + Rewriter API (`window.ai`) | local | Pré-processador on-device: correção ortográfica, sumarização e reescrita instantânea |
-| **Orquestrador** | Node.js + Fastify + WebSocket | `3001` | Núcleo do sistema: gerenciador de contexto, detecção, modos de reunião e IA |
-| **Whisper (VAD)** | Python + FastAPI + faster-whisper | `8000` | Transcrição local com GPU/CPU e Silero VAD (`vad_filter=True`) |
-| **API de IA** | Gemini, OpenAI, Anthropic, Ollama ou Proxy Customizado (DeepSeek, Groq) | externa / local | Geração de sugestões contextuais |
+| **Extensão Chrome** | React + TypeScript + Manifest V3 | — | **Orquestrador Principal**: detecção de perguntas, janela de contexto, roteamento de agentes, captura PCM, HUD Shadow DOM, TTS |
+| **Chrome AI (Gemini Nano)** | Prompt API + Rewriter API (`window.ai`) | local | IA on-device: correção ortográfica, sumarização e reescrita instantânea (100-300ms) |
+| **Whisper (VAD)** | Python + FastAPI + faster-whisper | `8000` | Transcrição local em tempo real com GPU/CPU e Silero VAD (`vad_filter=True`) |
+| **Orquestrador (Opcional)** | Node.js + Fastify + WebSocket | `3001` | Servidor de suporte opcional para headless/proxy |
+| **Provedores de IA** | Gemini, OpenAI, Anthropic, Ollama, Chrome AI ou Custom Proxy (DeepSeek, Groq) | externa / local | Geração de sugestões contextuais em streaming |
 
 ---
 
