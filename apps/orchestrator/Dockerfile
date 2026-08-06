@@ -16,8 +16,8 @@ COPY packages/shared-types/src/ packages/shared-types/src/
 COPY apps/orchestrator/package.json apps/orchestrator/
 COPY apps/orchestrator/tsconfig.json apps/orchestrator/
 
-# Instala dependências
-RUN npm ci --workspace=packages/shared-types --workspace=apps/orchestrator
+# Instala dependências dos workspaces e as ferramentas de build da raiz
+RUN npm ci --include-workspace-root --workspace=packages/shared-types --workspace=apps/orchestrator
 
 # Copia o código fonte
 COPY apps/orchestrator/src/ apps/orchestrator/src/

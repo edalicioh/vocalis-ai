@@ -79,6 +79,44 @@ describe('CustomProxyProvider (Proxy LLM Agnóstico)', () => {
     expect(events.some(e => e.type === 'answer.started')).toBe(true);
     expect(events.some(e => e.type === 'answer.delta' && e.data.chunk === 'Resposta ')).toBe(true);
     expect(events.some(e => e.type === 'answer.delta' && e.data.chunk === 'do Proxy Agnóstico.')).toBe(true);
-    expect(events.some(e => e.type === 'answer.completed')).toBe(true);
+    expect(events.some(e => e.type === 'answer.completed' && e.data.structured.answer === 'Resposta do Proxy Agnóstico.')).toBe(true);
+  });
+
+  it('deve interpretar resposta estruturada envolvida em bloco Markdown', async () => {
+    const structuredJson = JSON.stringify({
+      questionSummary: 'Dificuldade de aprender inglês',
+      opening: 'Não será fácil, mas estou preparado.',
+      answer: 'A imersão no Canadá acelerará o aprendizado.',
+      keyPoints: ['imersão', 'aprendizado']
+    });
+    const mockSseStream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: `\`\`\`json\n${structuredJson}\n\`\`\`` } }] })}\n\n`));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      }
+    });
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: mockSseStream }));
+
+    const events = [];
+    for await (const event of provider.generate({
+      requestId: 'req-structured',
+      question: 'Aprender inglês será difícil?',
+      prompt: 'Responda em JSON.',
+      responseMode: 'short'
+    })) {
+      events.push(event);
+    }
+
+    vi.unstubAllGlobals();
+
+    const completed = events.find(event => event.type === 'answer.completed');
+    expect(completed?.data.structured).toMatchObject({
+      opening: 'Não será fácil, mas estou preparado.',
+      answer: 'A imersão no Canadá acelerará o aprendizado.',
+      keyPoints: ['imersão', 'aprendizado']
+    });
   });
 });

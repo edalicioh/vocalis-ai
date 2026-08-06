@@ -1,3 +1,4 @@
+import { StructuredAnswer } from '@conversation-copilot/shared-types';
 import { AnswerProvider, AnswerInput, AnswerEvent } from './answer-provider.js';
 
 /**
@@ -114,6 +115,7 @@ export class CustomProxyProvider implements AnswerProvider {
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let fullText = '';
 
       while (true) {
         if (signal?.aborted) {
@@ -137,6 +139,7 @@ export class CustomProxyProvider implements AnswerProvider {
               const json = JSON.parse(dataStr);
               const deltaContent = json.choices?.[0]?.delta?.content || json.choices?.[0]?.text || '';
               if (deltaContent) {
+                fullText += deltaContent;
                 yield { type: 'answer.delta', data: { id: requestId, chunk: deltaContent } };
               }
             } catch {
@@ -150,12 +153,7 @@ export class CustomProxyProvider implements AnswerProvider {
         type: 'answer.completed',
         data: {
           id: requestId,
-          structured: {
-            questionSummary: question,
-            opening: '',
-            answer: '',
-            keyPoints: []
-          }
+          structured: this.parseStructuredAnswer(fullText, question)
         }
       };
     } catch (err: any) {
@@ -165,6 +163,32 @@ export class CustomProxyProvider implements AnswerProvider {
         yield { type: 'answer.failed', data: { id: requestId, error: err.message || 'Erro no Proxy LLM Customizado' } };
       }
     }
+  }
+
+  private parseStructuredAnswer(text: string, question: string): StructuredAnswer {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          questionSummary: parsed.questionSummary || question,
+          opening: parsed.opening || '',
+          answer: parsed.answer || '',
+          keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
+          clarifyingQuestion: parsed.clarifyingQuestion || undefined,
+          audioHint: parsed.audioHint || undefined
+        };
+      } catch {
+        // Usa o texto completo quando o modelo não retorna JSON válido.
+      }
+    }
+
+    return {
+      questionSummary: question,
+      opening: '',
+      answer: text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim(),
+      keyPoints: []
+    };
   }
 
   public async cancel(_requestId: string): Promise<void> {}

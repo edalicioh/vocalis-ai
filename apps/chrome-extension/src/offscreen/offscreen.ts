@@ -35,7 +35,10 @@ function connectWebSocket(source: AudioSource) {
     return;
   }
 
-  const wsUrl = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
+  const whisperWsUrl = (import.meta as any).env?.VITE_WHISPER_WS_URL || 'ws://localhost:8000/ws/transcribe';
+  const orchestratorWsUrl = (import.meta as any).env?.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
+  const wsUrl = (import.meta as any).env?.VITE_DIRECT_WHISPER === 'false' ? orchestratorWsUrl : whisperWsUrl;
+
   const ws = new WebSocket(wsUrl);
   audioSockets[source] = ws;
   ws.binaryType = 'arraybuffer';

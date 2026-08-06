@@ -63,6 +63,30 @@ describe('QuestionDetector', () => {
     expect(result.reasons).toContain(reason);
   });
 
+  it('detecta todas as perguntas de um diálogo completo em Inglês', () => {
+    const dialogue = `Where are you going?
+To Canada.
+Why are you going there?
+I'm going to learn English; there's a school there that has an excellent program.
+Is learning English going to be difficult?
+Yes. I have to study and practice a lot.
+Where's your school?
+It's in a town called St. Catharines in Ontario.
+I'm jealous, I'll bet you're excited.
+Yes, but I'm also really nervous.`;
+
+    const questions = QuestionDetector.detectAllWithContext(dialogue)
+      .filter(result => result.isQuestion)
+      .map(result => result.questionText);
+
+    expect(questions).toEqual([
+      'Where are you going?',
+      'Why are you going there?',
+      'Is learning English going to be difficult?',
+      "Where's your school?"
+    ]);
+  });
+
   it('mantém curiosidade ambígua na faixa de validação externa', () => {
     const result = QuestionDetector.detect('tenho curiosidade sobre a estratégia de cache do projeto');
 

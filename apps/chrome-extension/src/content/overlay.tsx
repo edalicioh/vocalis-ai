@@ -11,6 +11,7 @@ import {
   AnswerStartedPayload,
   AnswerDeltaPayload,
   AnswerCompletedPayload,
+  AnswerCancelledPayload,
   SavedConversation,
   ToneUpdatePayload,
   ConversationTone,
@@ -257,6 +258,8 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
     const handleRuntimeMessage = (msg: any) => {
       if (msg.type === 'AUDIO_VAD_STATE') {
         setIsAudioActive(msg.isAudioActive === true);
+      } else if (msg.type === 'SETTINGS_UPDATED') {
+        sendWsMessage({ type: 'settings.update', payload: msg.payload });
       }
     };
     chrome.runtime.onMessage.addListener(handleRuntimeMessage);
@@ -288,13 +291,38 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'session.register', sessionId: tabSessionId, payload: {} }));
-      chrome.storage.local.get(['conversationAnalysisMode'], (stored) => {
+      chrome.storage.local.get([
+        'aiProvider', 'geminiApiKey', 'geminiModel', 'openaiApiKey', 'openaiModel', 'anthropicApiKey', 'anthropicModel',
+        'ollamaEndpoint', 'ollamaModel', 'customProxyEndpoint', 'customProxyApiKey', 'customProxyModel',
+        'meetingMode', 'conversationAnalysisMode', 'responseMode', 'name', 'role', 'seniority', 'skills', 'experiences'
+      ], (stored) => {
         if (ws.readyState !== WebSocket.OPEN) return;
         ws.send(JSON.stringify({
           type: 'settings.update',
           sessionId: tabSessionId,
           payload: {
-            conversationAnalysisMode: stored.conversationAnalysisMode === 'hybrid' ? 'hybrid' : 'local'
+            aiProvider: stored.aiProvider || 'gemini',
+            geminiApiKey: stored.geminiApiKey,
+            geminiModel: stored.geminiModel,
+            openaiApiKey: stored.openaiApiKey,
+            openaiModel: stored.openaiModel,
+            anthropicApiKey: stored.anthropicApiKey,
+            anthropicModel: stored.anthropicModel,
+            ollamaEndpoint: stored.ollamaEndpoint,
+            ollamaModel: stored.ollamaModel,
+            customProxyEndpoint: stored.customProxyEndpoint,
+            customProxyApiKey: stored.customProxyApiKey,
+            customProxyModel: stored.customProxyModel,
+            meetingMode: stored.meetingMode,
+            conversationAnalysisMode: stored.conversationAnalysisMode === 'hybrid' ? 'hybrid' : 'local',
+            responseMode: stored.responseMode,
+            userProfile: {
+              name: stored.name,
+              role: stored.role,
+              seniority: stored.seniority,
+              skills: stored.skills ? String(stored.skills).split(',').map(s => s.trim()) : [],
+              experiences: stored.experiences ? String(stored.experiences).split(';').map(s => s.trim()) : []
+            }
           }
         }));
       });
@@ -368,13 +396,27 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
 
       case 'answer.started': {
         const started = msg.payload as AnswerStartedPayload;
-        setActiveSuggestion({
-          id: started.id,
-          question: started.question,
-          structured: {},
-          rawText: '',
-          timestamp: Date.now(),
-          status: 'streaming'
+        // Preserva a sugestão anterior se já havia uma em andamento
+        setActiveSuggestion(prev => {
+          if (prev?.rawText?.trim()) {
+            const savedItem: Suggestion = {
+              id: prev.id,
+              question: prev.question,
+              structured: prev.structured || {},
+              rawText: prev.rawText || 'Resposta interrompida por nova pergunta.',
+              timestamp: prev.timestamp,
+              status: 'complete'
+            };
+            setCompletedSuggestions(history => [savedItem, ...history.filter(s => s.id !== savedItem.id)]);
+          }
+          return {
+            id: started.id,
+            question: started.question,
+            structured: {},
+            rawText: '',
+            timestamp: Date.now(),
+            status: 'streaming'
+          };
         });
         updateWidgetVisibility('response', true);
         break;
@@ -403,28 +445,61 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
       case 'answer.completed':
       case 'SUGGESTION_COMPLETE' as any: {
         const completed = msg.payload as AnswerCompletedPayload | any;
-        const suggestion: Suggestion = {
-          id: completed.id,
-          question: activeSuggestion?.question || completed.question || '',
-          structured: completed.structured || {},
-          rawText: completed.answer || activeSuggestion?.rawText || '',
-          timestamp: Date.now(),
-          status: 'complete'
-        };
+        const structuredText = [completed.structured?.opening, completed.structured?.answer]
+          .filter(Boolean)
+          .join(' ');
+        setActiveSuggestion(prev => {
+          if (!prev || prev.id !== completed.id) return prev;
 
-        setActiveSuggestion(null);
-        setCompletedSuggestions(prev => [suggestion, ...prev]);
+          const suggestion: Suggestion = {
+            id: completed.id,
+            question: prev.question || completed.question || '',
+            structured: completed.structured || {},
+            rawText: structuredText || completed.answer || prev.rawText || '',
+            timestamp: Date.now(),
+            status: 'complete'
+          };
+          setCompletedSuggestions(history => [suggestion, ...history.filter(s => s.id !== suggestion.id)]);
+
+          if (!isTtsMuted) {
+            const structured = completed.structured as StructuredAnswer | undefined;
+            if (structured?.opening || structured?.answer) {
+              speechManager.speakStructured(structured);
+            } else if (suggestion.rawText) {
+              speechManager.speak(suggestion.rawText);
+            }
+          }
+
+          return null;
+        });
         setDetectedQuestion(null);
         updateWidgetVisibility('response', true);
+        break;
+      }
 
-        if (!isTtsMuted) {
-          const structured = completed.structured as StructuredAnswer | undefined;
-          if (structured?.opening || structured?.answer) {
-            speechManager.speakStructured(structured);
-          } else if (suggestion.rawText) {
-            speechManager.speak(suggestion.rawText);
+      case 'answer.cancelled': {
+        const cancelled = msg.payload as AnswerCancelledPayload;
+        setActiveSuggestion(prev => prev?.id === cancelled.id ? null : prev);
+        break;
+      }
+
+      case 'answer.failed': {
+        const failedPayload = msg.payload as any;
+        setActiveSuggestion(prev => {
+          if (prev) {
+            const savedItem: Suggestion = {
+              id: prev.id,
+              question: prev.question,
+              structured: prev.structured || {},
+              rawText: prev.rawText || `Falha na geração: ${failedPayload?.error || 'Erro de conexão'}`,
+              timestamp: prev.timestamp,
+              status: 'error'
+            };
+            setCompletedSuggestions(history => [savedItem, ...history.filter(s => s.id !== savedItem.id)]);
           }
-        }
+          return null;
+        });
+        setDetectedQuestion(null);
         break;
       }
 
@@ -594,9 +669,15 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
           dimensions={widgetDimensions.response}
           onDimensionsChange={dimensions => updateWidgetDimensions('response', dimensions)}
           suggestion={latestSuggestion}
+          suggestions={completedSuggestions}
           streamingContent={activeSuggestion?.rawText || ''}
           isStreaming={!!activeSuggestion}
-          question={detectedQuestion}
+          question={activeSuggestion ? {
+            isQuestion: true,
+            score: 1,
+            reasons: [],
+            questionText: activeSuggestion.question
+          } : detectedQuestion}
           onClose={() => updateWidgetVisibility('response', false)}
           onToggleMinimize={() => toggleWidgetMinimized('response')}
           isMinimized={widgetStates.response.minimized}
@@ -678,6 +759,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
                   setOpacity(nextOpacity);
                   saveOpacity(nextOpacity);
                 }}
+                onSave={(payload) => sendWsMessage({ type: 'settings.update', payload })}
               />
             </div>
           </div>

@@ -211,7 +211,16 @@ const PopupSettings: React.FC = () => {
         </button>
       </div>
 
-      <SettingsForm />
+      <SettingsForm
+        onSave={(payload) => {
+          if (!activeTabId) return;
+          chrome.tabs.sendMessage(
+            activeTabId,
+            { type: 'SETTINGS_UPDATED', payload },
+            () => void chrome.runtime.lastError
+          );
+        }}
+      />
     </div>
   );
 };

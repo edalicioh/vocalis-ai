@@ -9,7 +9,8 @@ interface ResponsePanelWidgetProps {
   onPositionChange: (pos: WidgetPosition) => void;
   dimensions: WidgetDimensions;
   onDimensionsChange: (dimensions: WidgetDimensions) => void;
-  suggestion: Suggestion | null;
+  suggestion?: Suggestion | null;
+  suggestions?: Suggestion[];
   streamingContent: string;
   isStreaming: boolean;
   question: QuestionDetectionResult | null;
@@ -29,7 +30,8 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
   onPositionChange,
   dimensions,
   onDimensionsChange,
-  suggestion,
+  suggestion = null,
+  suggestions = [],
   streamingContent,
   isStreaming,
   question,
@@ -43,9 +45,24 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
   opacity,
   uiLanguage = 'pt-BR'
 }) => {
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const resizeRef = useRef<{ startX: number; startY: number; width: number; height: number } | null>(null);
+  const contentContainerRef = useRef<HTMLDivElement | null>(null);
+  const listEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Lista combinada de sugestões em ordem cronológica (antiga -> recente)
+  const allSuggestions: Suggestion[] = (suggestions.length > 0 ? suggestions : (suggestion ? [suggestion] : []))
+    .slice()
+    .reverse();
+
+  // Efeito para auto-scroll suave até o item mais recente
+  React.useEffect(() => {
+    if (listEndRef.current) {
+      listEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [allSuggestions.length, isStreaming, streamingContent]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -105,34 +122,26 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
     window.addEventListener('pointerup', handlePointerUp);
   };
 
-  const currentSuggestion = isStreaming ? null : suggestion;
-
-  const handleCopy = () => {
-    const textToCopy = currentSuggestion?.rawText || streamingContent;
-    if (!textToCopy) return;
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyItem = (id: string, text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Se não houver pergunta nem sugestão nem streaming, mostra estado vazio
-  const isEmpty = !currentSuggestion && !isStreaming && !question && !streamingContent;
-
-  // Extração das partes da resposta (Frase de abertura vs Resposta estendida)
-  let starterSentence = currentSuggestion?.structured?.opening || '';
-  let fullAnswerText = currentSuggestion?.structured?.answer || currentSuggestion?.rawText || '';
-  let keywords = currentSuggestion?.structured?.keyPoints || [];
-
-  if (!starterSentence && fullAnswerText) {
-    const firstPeriod = fullAnswerText.indexOf('.');
-    if (firstPeriod > 10 && firstPeriod < 120) {
-      starterSentence = fullAnswerText.substring(0, firstPeriod + 1);
-      fullAnswerText = fullAnswerText.substring(firstPeriod + 1).trim();
+  const handleSpeakItem = (id: string, text: string) => {
+    if (isSpeaking && speakingId === id) {
+      onStopSpeech();
+      setSpeakingId(null);
+    } else {
+      onStopSpeech();
+      setSpeakingId(id);
+      onSpeak(text);
     }
-  }
+  };
 
-  // Divisão de frases para o TTS sentence-by-sentence highlight
-  const sentences: string[] = fullAnswerText ? fullAnswerText.match(/[^.!?]+[.!?]+/g) || [fullAnswerText] : [];
+  // Se não houver pergunta nem sugestões nem streaming, mostra estado vazio
+  const isEmpty = allSuggestions.length === 0 && !isStreaming && !question && !streamingContent;
 
   return (
     <div
@@ -188,7 +197,7 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
             </span>
             <Sparkles size={14} color="#818cf8" />
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.3px' }}>
-              {t('panel.title', uiLanguage)}
+              {t('panel.title', uiLanguage)} {allSuggestions.length > 0 ? `(${allSuggestions.length})` : ''}
             </span>
           </div>
 
@@ -211,195 +220,251 @@ export const ResponsePanelWidget: React.FC<ResponsePanelWidgetProps> = ({
         </div>
 
         {!isMinimized && (
-          <div style={{ padding: '14px', overflowY: 'auto', flex: 1 }}>
-            {/* Pergunta Detectada */}
-            {question && (
-              <div
-                style={{
-                  marginBottom: '12px',
-                  padding: '8px 12px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(245, 158, 11, 0.12)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '8px'
-                }}
-              >
-                <HelpCircle size={15} color="#f59e0b" style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    PERGUNTA DETECTADA
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#fef3c7', fontWeight: 500 }}>{question.questionText}</div>
-                </div>
-              </div>
-            )}
-
+          <div ref={contentContainerRef} style={{ padding: '14px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Estado Vazio */}
             {isEmpty && (
               <div style={{ padding: '24px 12px', textAlign: 'center', color: '#94a3b8' }}>
                 <Sparkles size={24} color="#6366f1" style={{ marginBottom: '8px', opacity: 0.6 }} />
                 <div style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Aguardando uma pergunta...</div>
                 <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                  A sugestão de resposta aparecerá automaticamente quando uma pergunta for identificada.
+                  As sugestões de resposta encadeadas aparecerão automaticamente conforme as perguntas forem identificadas.
                 </div>
               </div>
             )}
 
-            {/* Gerando resposta / Streaming */}
-            {isStreaming && (
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-                  GERANDO RESPOSTA...
-                </div>
-                <div style={{ fontSize: '15px', color: '#f8fafc', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                  {streamingContent || 'Preparando a melhor sugestão...'}
-                  <span className="copilot-cursor">▍</span>
-                </div>
-              </div>
-            )}
+            {/* Lista Encadeada de Sugestões Concluídas */}
+            {allSuggestions.map((sugg, itemIdx) => {
+              const itemNum = itemIdx + 1;
+              let starterSentence = sugg.structured?.opening || '';
+              let fullAnswerText = sugg.structured?.answer || sugg.rawText || '';
+              let keywords = sugg.structured?.keyPoints || [];
 
-            {/* Sugestão Pronta (Quando não está em streaming) */}
-            {!isStreaming && currentSuggestion && (
-              <>
-                {/* Nível 1: Frase de Abertura */}
-                {starterSentence && (
-                  <div
-                    style={{
-                      marginBottom: '12px',
-                      padding: '10px 12px',
-                      borderRadius: '10px',
-                      backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                      borderLeft: '4px solid #6366f1',
-                      border: '1px solid rgba(99, 102, 241, 0.3)'
-                    }}
-                  >
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
-                      COMO COMEÇAR
-                    </div>
-                    <div style={{ fontSize: '17px', fontWeight: 600, color: '#ffffff', lineHeight: 1.4 }}>
-                      "{starterSentence}"
-                    </div>
-                  </div>
-                )}
+              if (!starterSentence && fullAnswerText) {
+                const firstPeriod = fullAnswerText.indexOf('.');
+                if (firstPeriod > 10 && firstPeriod < 120) {
+                  starterSentence = fullAnswerText.substring(0, firstPeriod + 1);
+                  fullAnswerText = fullAnswerText.substring(firstPeriod + 1).trim();
+                }
+              }
 
-                {/* Nível 2: Resposta Principal */}
-                {fullAnswerText && (
-                  <div style={{ marginBottom: '12px' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-                      RESPOSTA
-                    </div>
-                    <div style={{ fontSize: '15px', color: '#e2e8f0', lineHeight: 1.6 }}>
-                      {sentences.map((sent: string, idx: number) => {
-                        const isActive = activeSentenceIndex === idx;
-                        return (
-                          <span
-                            key={idx}
-                            style={{
-                              backgroundColor: isActive ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
-                              borderLeft: isActive ? '3px solid #6366f1' : 'none',
-                              paddingLeft: isActive ? '4px' : '0px',
-                              borderRadius: isActive ? '4px' : '0px',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            {sent}{' '}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+              const sentences: string[] = fullAnswerText ? fullAnswerText.match(/[^.!?]+[.!?]+/g) || [fullAnswerText] : [];
+              const isItemSpeaking = isSpeaking && speakingId === sugg.id;
+              const isCopied = copiedId === sugg.id;
 
-                {/* Nível 3: Palavras-chave / Chips */}
-                {keywords.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
-                    {keywords.map((kw: string, i: number) => (
-                      <span
-                        key={i}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          backgroundColor: 'rgba(99, 102, 241, 0.12)',
-                          border: '1px solid rgba(99, 102, 241, 0.25)',
-                          color: '#a5b4fc',
-                          fontSize: '11px',
-                          fontWeight: 600
-                        }}
-                      >
-                        <Tag size={10} />
-                        {kw}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-
-
-                {/* Barra de Ações Inferior do Card */}
+              return (
                 <div
+                  key={sugg.id || itemIdx}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: '8px',
-                    marginTop: '12px',
-                    paddingTop: '8px',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+                    padding: '12px',
+                    borderRadius: '12px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(99, 102, 241, 0.2)'
                   }}
                 >
-                  <button
-                    onClick={handleCopy}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      backgroundColor: 'transparent',
-                      color: copied ? '#4ade80' : '#94a3b8',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {copied ? <Check size={12} /> : <Copy size={12} />}
-                    <span>{copied ? t('panel.copied', uiLanguage) : t('panel.copy', uiLanguage)}</span>
-                  </button>
+                  {/* Cabeçalho da Pergunta Encadeada */}
+                  {sugg.question && (
+                    <div
+                      style={{
+                        marginBottom: '10px',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '8px'
+                      }}
+                    >
+                      <HelpCircle size={15} color="#f59e0b" style={{ marginTop: '2px', flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: '10px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          PERGUNTA #{itemNum}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#fef3c7', fontWeight: 500 }}>{sugg.question}</div>
+                      </div>
+                    </div>
+                  )}
 
-                  <button
-                    onClick={() => {
-                      if (isSpeaking) {
-                        onStopSpeech();
-                      } else {
-                        onSpeak(currentSuggestion?.rawText || streamingContent);
-                      }
-                    }}
+                  {/* Nível 1: Frase de Abertura */}
+                  {starterSentence && (
+                    <div
+                      style={{
+                        marginBottom: '10px',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                        borderLeft: '4px solid #6366f1',
+                        border: '1px solid rgba(99, 102, 241, 0.3)'
+                      }}
+                    >
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>
+                        COMO COMEÇAR
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff', lineHeight: 1.4 }}>
+                        "{starterSentence}"
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Nível 2: Resposta Principal */}
+                  {fullAnswerText && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                        RESPOSTA #{itemNum}
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#e2e8f0', lineHeight: 1.6 }}>
+                        {sentences.map((sent: string, idx: number) => {
+                          const isActive = isItemSpeaking && activeSentenceIndex === idx;
+                          return (
+                            <span
+                              key={idx}
+                              style={{
+                                backgroundColor: isActive ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+                                borderLeft: isActive ? '3px solid #6366f1' : 'none',
+                                paddingLeft: isActive ? '4px' : '0px',
+                                borderRadius: isActive ? '4px' : '0px',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              {sent}{' '}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Nível 3: Palavras-chave / Chips */}
+                  {keywords.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                      {keywords.map((kw: string, i: number) => (
+                        <span
+                          key={i}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                            border: '1px solid rgba(99, 102, 241, 0.25)',
+                            color: '#a5b4fc',
+                            fontSize: '11px',
+                            fontWeight: 600
+                          }}
+                        >
+                          <Tag size={10} />
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Barra de Ações Inferior do Item */}
+                  <div
                     style={{
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      backgroundColor: isSpeaking ? 'rgba(239, 68, 68, 0.2)' : '#6366f1',
-                      color: isSpeaking ? '#fca5a5' : '#ffffff',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer'
+                      justifyContent: 'flex-end',
+                      gap: '8px',
+                      marginTop: '10px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.08)'
                     }}
                   >
-                    {isSpeaking ? <Pause size={12} /> : <Volume2 size={12} />}
-                    <span>{isSpeaking ? 'Pausar TTS' : 'Ler em Voz Alta'}</span>
-                  </button>
+                    <button
+                      onClick={() => handleCopyItem(sugg.id, sugg.rawText || fullAnswerText)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        backgroundColor: 'transparent',
+                        color: isCopied ? '#4ade80' : '#94a3b8',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                      <span>{isCopied ? t('panel.copied', uiLanguage) : t('panel.copy', uiLanguage)}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleSpeakItem(sugg.id, sugg.rawText || fullAnswerText)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        backgroundColor: isItemSpeaking ? 'rgba(239, 68, 68, 0.2)' : '#6366f1',
+                        color: isItemSpeaking ? '#fca5a5' : '#ffffff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {isItemSpeaking ? <Pause size={12} /> : <Volume2 size={12} />}
+                      <span>{isItemSpeaking ? 'Pausar TTS' : 'Ler em Voz Alta'}</span>
+                    </button>
+                  </div>
                 </div>
-              </>
+              );
+            })}
+
+            {/* Gerando resposta / Streaming do Item Atual no final da lista */}
+            {(isStreaming || (question && !allSuggestions.some(s => s.question === question.questionText))) && (
+              <div
+                style={{
+                  padding: '12px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)'
+                }}
+              >
+                {question && (
+                  <div
+                    style={{
+                      marginBottom: '10px',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px'
+                    }}
+                  >
+                    <HelpCircle size={15} color="#f59e0b" style={{ marginTop: '2px', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        PERGUNTA #{allSuggestions.length + 1} DETECTADA
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#fef3c7', fontWeight: 500 }}>{question.questionText}</div>
+                    </div>
+                  </div>
+                )}
+
+                {isStreaming && (
+                  <div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                      GERANDO RESPOSTA...
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#f8fafc', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                      {streamingContent || 'Preparando a melhor sugestão...'}
+                      <span className="copilot-cursor">▍</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
+
+            {/* Elemento de referência para auto-scroll */}
+            <div ref={listEndRef} />
           </div>
         )}
 

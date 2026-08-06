@@ -83,12 +83,16 @@ test.describe('Chrome Extension E2E — Página de Opções & Perfil', () => {
 
     await page.goto(`chrome-extension://${extensionId}/src/options/options.html`);
 
-    // 1. Seleciona o provedor Gemini (segundo select, após idioma)
-    const providerSelect = page.locator('select').nth(1);
+    // 1. Seleciona o provedor pelo conjunto de opções, sem depender da ordem dos campos
+    const providerSelect = page.locator('select').filter({
+      has: page.locator('option[value="gemini"]')
+    });
     await providerSelect.selectOption('gemini');
 
-    // 2. Verifica que o seletor de modelos do Gemini está visível (terceiro select)
-    const modelSelect = page.locator('select').nth(2);
+    // 2. Verifica que o seletor de modelos do Gemini está visível
+    const modelSelect = page.locator('select').filter({
+      has: page.locator('option[value="gemini-2.5-flash"]')
+    });
     await expect(modelSelect).toBeVisible();
 
     // 3. Escolhe a opção de digitação livre
@@ -119,9 +123,9 @@ test.describe('Chrome Extension E2E — Página de Opções & Perfil', () => {
 
     await page.getByRole('button', { name: /Modos/ }).click();
 
-    const analysisMode = page.getByLabel('Detecção de perguntas e tom');
+    const analysisMode = page.getByLabel('⚡ Velocidade & Modo de Análise');
     await expect(analysisMode).toHaveValue('local');
-    await expect(page.getByText(/No modo híbrido, o resumo e as falas recentes são enviados/)).toBeVisible();
+    await expect(page.getByText(/Para testar velocidade extrema de resposta/)).toBeVisible();
 
     await analysisMode.selectOption('hybrid');
     await page.getByRole('button', { name: 'Salvar Configurações' }).click();

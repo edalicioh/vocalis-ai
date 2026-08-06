@@ -161,9 +161,15 @@ export class GeminiProvider implements AnswerProvider {
           data: { id: input.requestId, reason: 'Requisição cancelada' }
         };
       } else {
+        const rawErr = String(err?.message || err);
+        const isQuotaError = rawErr.includes('429') || rawErr.includes('Quota exceeded') || rawErr.includes('Too Many Requests');
+        const userFriendlyError = isQuotaError
+          ? '⚠️ Limite de requisições da chave gratuita do Gemini excedido (Erro 429). Aguarde 45 segundos ou troque para o modelo gemini-1.5-flash / Groq nas Opções.'
+          : `Falha no Gemini: ${rawErr}`;
+
         yield {
           type: 'answer.failed',
-          data: { id: input.requestId, error: `Falha no Gemini: ${err.message || err}` }
+          data: { id: input.requestId, error: userFriendlyError }
         };
       }
     } finally {

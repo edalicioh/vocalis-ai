@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import WebSocket from 'ws';
 import { processUtterance, server, startServer } from '../server.js';
 import {
@@ -216,5 +216,78 @@ describe('Orchestrator Fastify Server & WebSocket Interface', () => {
 
     expect(receivedMessages.some(message => message.type === 'transcript.final')).toBe(true);
     expect(receivedMessages.some(message => message.type === 'question.detected')).toBe(false);
+  });
+
+  it('deve enfileirar perguntas explícitas e responder todas na ordem', async () => {
+    const sessionId = 'test-session-question-queue';
+    const wsUrl = serverAddress.replace('http://', 'ws://') + '/ws';
+    const ws = new WebSocket(wsUrl);
+    const receivedMessages: WSMessage[] = [];
+    let utterancesSent = false;
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Resposta da fila."}}]}\n\n'));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    }));
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({
+          type: 'settings.update',
+          sessionId,
+          payload: {
+            aiProvider: 'custom_proxy',
+            customProxyEndpoint: 'https://proxy.test/v1/chat/completions',
+            customProxyModel: 'modelo-teste',
+            conversationAnalysisMode: 'local'
+          }
+        }));
+      });
+
+      ws.on('message', data => {
+        const msg = JSON.parse(data.toString()) as WSMessage;
+        receivedMessages.push(msg);
+
+        if (msg.type === 'status.update' && !utterancesSent) {
+          utterancesSent = true;
+          processUtterance({
+            id: 'queue-question-1',
+            speaker: 'interviewer',
+            text: 'Where are you going?',
+            timestamp: Date.now(),
+            isFinal: true
+          }, sessionId);
+          processUtterance({
+            id: 'queue-question-2',
+            speaker: 'interviewer',
+            text: 'Why are you going there?',
+            timestamp: Date.now() + 1,
+            isFinal: true
+          }, sessionId);
+        }
+
+        if (receivedMessages.filter(message => message.type === 'answer.completed').length === 2) {
+          resolve();
+        }
+      });
+
+      ws.on('error', reject);
+    });
+
+    ws.close();
+    vi.unstubAllGlobals();
+
+    const startedQuestions = receivedMessages
+      .filter(message => message.type === 'answer.started')
+      .map(message => (message.payload as { question: string }).question);
+    expect(startedQuestions).toEqual(['Where are you going?', 'Why are you going there?']);
+    expect(receivedMessages.some(message => message.type === 'answer.cancelled')).toBe(false);
   });
 });

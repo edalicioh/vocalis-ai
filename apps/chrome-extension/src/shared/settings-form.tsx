@@ -44,7 +44,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
     openai: OPENAI_MODEL_OPTIONS,
     anthropic: ANTHROPIC_MODEL_OPTIONS,
     ollama: OLLAMA_MODEL_OPTIONS,
-    custom_proxy: CUSTOM_PROXY_MODEL_OPTIONS
+    custom_proxy: CUSTOM_PROXY_MODEL_OPTIONS,
+    chrome_ai: CHROME_AI_MODEL_OPTIONS
   });
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [fetchModelsMsg, setFetchModelsMsg] = useState<string | null>(null);
@@ -478,7 +479,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
             </div>
 
             <div style={fieldGroupStyle}>
-              <label htmlFor="conversation-analysis-mode" style={labelStyle}>Detecção de perguntas e tom</label>
+              <label htmlFor="conversation-analysis-mode" style={labelStyle}>⚡ Velocidade & Modo de Análise</label>
               <select
                 id="conversation-analysis-mode"
                 aria-describedby="conversation-analysis-mode-description"
@@ -486,11 +487,11 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
                 onChange={e => setConversationAnalysisMode(e.target.value as ConversationAnalysisMode)}
                 style={inputStyle}
               >
-                <option value="local">Local (padrão)</option>
-                <option value="hybrid">Híbrido</option>
+                <option value="local">🏠 Local (Processamento 100% no dispositivo)</option>
+                <option value="hybrid">⚡ Híbrido / Nuvem (Bypass Local - Máxima Velocidade de Resposta)</option>
               </select>
-              <p id="conversation-analysis-mode-description" style={{ fontSize: '10px', color: '#6b7280', margin: '2px 0 0' }}>
-                No modo híbrido, o resumo e as falas recentes são enviados ao provedor de IA para validar perguntas ambíguas e refinar o tom. Respostas e atas seguem as configurações próprias do provedor.
+              <p id="conversation-analysis-mode-description" style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0' }}>
+                Para testar velocidade extrema de resposta, selecione <b>Híbrido / Nuvem</b>. Isso desliga o processamento do modelo local e utiliza a API direta na nuvem.
               </p>
             </div>
 
@@ -647,6 +648,11 @@ const CUSTOM_PROXY_MODEL_OPTIONS: ModelOption[] = [
   { value: 'anthropic/claude-3.5-sonnet', label: '🌐 Claude 3.5 Sonnet (OpenRouter)' },
   { value: 'mistral-small-latest', label: '🍃 Mistral Small (Mistral Cloud)' },
 ];
+
+const CHROME_AI_MODEL_OPTIONS: ModelOption[] = [
+  { value: 'gemini-nano', label: '🤖 Gemini Nano On-Device (Chrome Built-in AI)' }
+];
+
 
 const ModelSelectorField: React.FC<{
   label: string;

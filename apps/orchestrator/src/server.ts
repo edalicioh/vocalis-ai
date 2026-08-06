@@ -49,6 +49,7 @@ const pendingToneRefinements = new Map<string, {
   controller: AbortController;
 }>();
 const queuedQuestionValidations = new Map<string, QuestionDetectionResult>();
+const queuedSuggestionQuestions = new Map<string, string[]>();
 const sessionUtteranceVersions = new Map<string, number>();
 const recentDetectedQuestions = new Map<string, { normalizedText: string; detectedAt: number }>();
 const activeCaptureSessions = new Set<string>();
@@ -180,20 +181,25 @@ function broadcastStatus(targetSessionId?: string) {
 // Geração de resposta com IA (RF-009, RF-010)
 // ============================================================
 
+function enqueueLLMSuggestion(questionText: string, targetSessionId?: string): void {
+  const sessionKey = getSessionKey(targetSessionId);
+  if (!sessionActiveRequests.has(sessionKey)) {
+    void triggerLLMSuggestion(questionText, targetSessionId);
+    return;
+  }
+
+  const queue = queuedSuggestionQuestions.get(sessionKey) || [];
+  queue.push(questionText);
+  queuedSuggestionQuestions.set(sessionKey, queue);
+  server.log.info(
+    { question: questionText, queuedQuestions: queue.length, targetSessionId },
+    'Pergunta adicionada à fila de sugestões.'
+  );
+}
+
 async function triggerLLMSuggestion(questionText: string, targetSessionId?: string) {
   const requestId = Math.random().toString(36).substring(2, 9);
-  const sessionKey = targetSessionId || 'default';
-  const lastActiveRequest = sessionActiveRequests.get(sessionKey);
-
-  // RN-002: Cancela geração anterior da mesma sessão se existir
-  if (lastActiveRequest) {
-    await answerProvider.cancel(lastActiveRequest);
-    broadcastToSession(targetSessionId, {
-      type: 'answer.cancelled',
-      sessionId: targetSessionId,
-      payload: { id: lastActiveRequest, reason: 'Nova pergunta detectada' }
-    });
-  }
+  const sessionKey = getSessionKey(targetSessionId);
 
   sessionActiveRequests.set(sessionKey, requestId);
 
@@ -271,10 +277,20 @@ async function triggerLLMSuggestion(questionText: string, targetSessionId?: stri
   } finally {
     if (sessionActiveRequests.get(sessionKey) === requestId) {
       sessionActiveRequests.delete(sessionKey);
-      const queuedDetection = queuedQuestionValidations.get(sessionKey);
-      if (queuedDetection) {
-        queuedQuestionValidations.delete(sessionKey);
-        void validateAmbiguousQuestion(queuedDetection, targetSessionId);
+      const queuedQuestions = queuedSuggestionQuestions.get(sessionKey);
+      const nextQuestion = queuedQuestions?.shift();
+      if (queuedQuestions?.length === 0) {
+        queuedSuggestionQuestions.delete(sessionKey);
+      }
+
+      if (nextQuestion) {
+        void triggerLLMSuggestion(nextQuestion, targetSessionId);
+      } else {
+        const queuedDetection = queuedQuestionValidations.get(sessionKey);
+        if (queuedDetection) {
+          queuedQuestionValidations.delete(sessionKey);
+          void validateAmbiguousQuestion(queuedDetection, targetSessionId);
+        }
       }
     }
   }
@@ -383,7 +399,7 @@ function publishDetectedQuestion(
   }
 
   if (answerProvider.isConfigured()) {
-    void triggerLLMSuggestion(detection.questionText, targetSessionId);
+    enqueueLLMSuggestion(detection.questionText, targetSessionId);
   }
 }
 
@@ -533,15 +549,17 @@ function processUtterance(utterance: Utterance, targetSessionId?: string): void 
 
   // A transcrição final encerra a fala; o pipeline atual não fornece pausa pós-fala confiável.
   if (utterance.speaker === 'interviewer') {
-    const detection = QuestionDetector.detectWithContext(utterance.text, 0, true, {
+    const detections = QuestionDetector.detectAllWithContext(utterance.text, 0, true, {
       recentUtterances: cm.getRecentUtterances(),
       accumulatedPartials
     });
 
-    if (detection.isQuestion) {
-      publishDetectedQuestion(detection, resolvedSessionId);
-    } else {
-      void validateAmbiguousQuestion(detection, resolvedSessionId);
+    for (const detection of detections) {
+      if (detection.isQuestion) {
+        publishDetectedQuestion(detection, resolvedSessionId);
+      } else if (QuestionDetector.shouldValidateExternally(detection.score)) {
+        void validateAmbiguousQuestion(detection, resolvedSessionId);
+      }
     }
   }
 
@@ -637,7 +655,7 @@ async function startServer() {
 
         try {
           const msg: WSMessage = JSON.parse(rawMsg.toString());
-          server.log.info({ type: msg.type, sessionId: msg.sessionId, payload: msg.payload }, '📩 [WS Message] Recebida da extensão');
+          server.log.info({ type: msg.type, sessionId: msg.sessionId }, '📩 [WS Message] Recebida da extensão');
 
           if (msg.sessionId) {
             socketSessionMap.set(socket, msg.sessionId);
@@ -679,6 +697,7 @@ async function startServer() {
                 if (settings.conversationAnalysisMode) {
                   cm.setConversationAnalysisMode(settings.conversationAnalysisMode);
                 }
+                providerManager.updateSettings(settings);
               }
 
               server.log.info({ sessionId: targetSessionId }, '🟢 [Sessão] Iniciada com sucesso.');
@@ -699,6 +718,7 @@ async function startServer() {
               pendingQuestionValidations.get(sessionKey)?.controller.abort();
               pendingQuestionValidations.delete(sessionKey);
               queuedQuestionValidations.delete(sessionKey);
+              queuedSuggestionQuestions.delete(sessionKey);
               pendingToneRefinements.get(sessionKey)?.controller.abort();
               pendingToneRefinements.delete(sessionKey);
               sessionUtteranceVersions.delete(sessionKey);

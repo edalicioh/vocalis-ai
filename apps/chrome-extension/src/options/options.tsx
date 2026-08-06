@@ -48,11 +48,20 @@ const OptionsPage: React.FC = () => {
   const [chromeAiStatus, setChromeAiStatus] = useState<{ available: boolean; status: string }>({ available: false, status: 'unsupported' });
 
   useEffect(() => {
-    chrome.storage.local.get('chromeAiStatus', (res) => {
-      if (res.chromeAiStatus) {
-        setChromeAiStatus(res.chromeAiStatus);
-      }
-    });
+    const isAiAvailable =
+      typeof (window as any).LanguageModel !== 'undefined' ||
+      typeof (window as any).ai?.languageModel !== 'undefined' ||
+      (typeof (window as any).ai !== 'undefined' && (window as any).ai !== null);
+
+    if (isAiAvailable) {
+      setChromeAiStatus({ available: true, status: 'available' });
+    } else {
+      chrome.storage.local.get('chromeAiStatus', (res) => {
+        if (res.chromeAiStatus) {
+          setChromeAiStatus(res.chromeAiStatus);
+        }
+      });
+    }
   }, []);
 
   return (

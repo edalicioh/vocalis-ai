@@ -90,6 +90,22 @@ export interface JobDescription {
 export type MeetingMode = 'technical_interview' | 'system_design' | 'code_review' | 'general';
 
 // ============================================================
+// Definição de Agente — Orquestração da Extensão
+// ============================================================
+
+export interface AgentDefinition {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  provider?: AIProvider;
+  model?: string;
+  capabilities: string[];
+  outputSchema?: Record<string, unknown>;
+}
+
+
+// ============================================================
 // Modos de Resposta — RF-017
 // ============================================================
 
@@ -111,7 +127,7 @@ export type PanelMode = 'compact' | 'normal' | 'keywords-only' | 'transcription-
 // Configurações — Expandidas
 // ============================================================
 
-export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama' | 'custom_proxy';
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'ollama' | 'custom_proxy' | 'chrome_ai';
 export type UiLanguage = 'pt-BR' | 'en';
 export type ConversationAnalysisMode = 'local' | 'hybrid';
 
