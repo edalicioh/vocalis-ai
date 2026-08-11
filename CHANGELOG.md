@@ -9,6 +9,14 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [1.2.0] - 2026-08-11
+
+### Adicionado
+- **Captura Desativada e Painel Fechado por Padrão**: A captura de áudio inicia sempre desativada (`isCapturing = false`) ao carregar uma reunião e os widgets flutuantes (`response` e `transcription`) permanecem fechados até a ativação explícita.
+- **Renovação Dinâmica de Sessão**: Cada acionamento de captura ("Iniciar captura") gera um novo `sessionId` dinâmico e limpa completamente o contexto e estado das sugestões da sessão anterior.
+- **Modos de Reunião & Transcrição Geral**: Adicionados os modos `general` e `transcription_only` (🎙️ *Apenas Transcrição*), desativando respostas automáticas de entrevista técnica para reuniões normais de trabalho.
+- **Gravação e Armazenamento Local do Áudio Completo**: Mixagem dual (Aba + Microfone) via `MediaRecorder` em Opus/WebM salva em tempo real no **IndexedDB local** (`CopilotAudioDB`), com controle de privacidade e botão de download 🎧 **"Baixar Áudio (.webm)"**.
+
 ## [1.0.0] - 2026-07-29
 
 ### Adicionado

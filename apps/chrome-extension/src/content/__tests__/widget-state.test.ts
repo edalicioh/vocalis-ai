@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getDefaultDimensions,
+  getDefaultStates,
   loadOpacity,
   loadWidgetDimensions,
+  loadWidgetStates,
   saveOpacity,
   saveWidgetDimensions
 } from '../widget-state';
@@ -54,5 +56,30 @@ describe('estado visual dos widgets', () => {
     values.set('copilotOpacity', '0.1');
 
     expect(loadOpacity()).toBe(0.95);
+  });
+
+  it('inicializa apenas a barra de funções visível', () => {
+    expect(getDefaultStates()).toEqual({
+      functionBar: { visible: true, minimized: false },
+      status: { visible: false, minimized: false },
+      response: { visible: false, minimized: false },
+      transcription: { visible: false, minimized: false }
+    });
+  });
+
+  it('ignora painéis visíveis persistidos de uma sessão anterior', () => {
+    values.set('copilotWidgetStates', JSON.stringify({
+      functionBar: { visible: false, minimized: true },
+      status: { visible: true, minimized: true },
+      response: { visible: true, minimized: true },
+      transcription: { visible: true, minimized: true }
+    }));
+
+    expect(loadWidgetStates()).toEqual({
+      functionBar: { visible: true, minimized: true },
+      status: { visible: false, minimized: true },
+      response: { visible: false, minimized: true },
+      transcription: { visible: false, minimized: true }
+    });
   });
 });

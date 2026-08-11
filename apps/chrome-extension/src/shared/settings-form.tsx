@@ -11,6 +11,7 @@ import {
   UiLanguage
 } from '@conversation-copilot/shared-types';
 import { t } from './i18n';
+import { normalizeMeetingMode } from './meeting-mode';
 
 type SettingsTab = 'api' | 'profile' | 'job' | 'modes';
 
@@ -37,6 +38,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>('pt-BR');
   const [realtimeTranslation, setRealtimeTranslation] = useState(true);
   const [targetTranslationLanguage, setTargetTranslationLanguage] = useState('pt-BR');
+  const [recordFullAudio, setRecordFullAudio] = useState(false);
 
   // Modelos carregados dinamicamente via API
   const [dynamicModels, setDynamicModels] = useState<Record<AIProvider, ModelOption[]>>({
@@ -119,7 +121,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
     technical_interview: '',
     system_design: '',
     code_review: '',
-    general: ''
+    general: '',
+    transcription_only: ''
   });
   const [rmsThreshold, setRmsThreshold] = useState<number>(0.01);
   const [responseMode, setResponseMode] = useState<ResponseMode>('short');
@@ -133,7 +136,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
   // Carrega dados salvos
   useEffect(() => {
     chrome.storage.local.get(null, (res) => {
-      if (res.meetingMode) setMeetingMode(res.meetingMode);
+      if (res.meetingMode) setMeetingMode(normalizeMeetingMode(res.meetingMode));
       setConversationAnalysisMode(res.conversationAnalysisMode === 'hybrid' ? 'hybrid' : 'local');
       if (res.modeNotes) setModeNotes(prev => ({ ...prev, ...res.modeNotes }));
       if (typeof res.rmsThreshold === 'number') setRmsThreshold(res.rmsThreshold);
@@ -167,6 +170,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       if (res.uiLanguage) setUiLanguage(res.uiLanguage);
       if (res.realtimeTranslation !== undefined) setRealtimeTranslation(res.realtimeTranslation);
       if (res.targetTranslationLanguage) setTargetTranslationLanguage(res.targetTranslationLanguage);
+      if (res.recordFullAudio !== undefined) setRecordFullAudio(res.recordFullAudio);
       if (res.responseMode) setResponseMode(res.responseMode);
       if (res.ttsMode) setTtsMode(res.ttsMode);
       if (res.ttsSpeed) setTtsSpeed(res.ttsSpeed);
@@ -226,7 +230,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       jobDescription: job,
       uiLanguage,
       realtimeTranslation,
-      targetTranslationLanguage
+      targetTranslationLanguage,
+      recordFullAudio
     };
   };
 
@@ -246,20 +251,13 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
       strengths, weaknesses, jobTitle, jobCompany, jobDescription,
       jobRequirements, jobNiceToHave, jobTechnologies, jobNotes,
       responseMode, ttsMode, ttsSpeed, ttsVolume, uiLanguage,
-      realtimeTranslation, targetTranslationLanguage
+      realtimeTranslation, targetTranslationLanguage, recordFullAudio
     }, () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     });
 
     chrome.runtime.sendMessage({ type: 'SET_RMS_THRESHOLD', rmsThreshold }).catch(() => {});
-
-    const wsUrl = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
-    const ws = new WebSocket(wsUrl);
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'settings.update', payload }));
-      setTimeout(() => ws.close(), 500);
-    };
 
     onSave?.(payload);
   };
@@ -475,6 +473,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
                 <option value="system_design">🏗️ System Design (Trade-offs e Arquitetura)</option>
                 <option value="code_review">💻 Code Review (Complexidade e Refatoração)</option>
                 <option value="general">📝 Reunião Geral (Alinhamento e Action Items)</option>
+                <option value="transcription_only">🎙️ Apenas Transcrição (Sem sugestões automáticas)</option>
               </select>
             </div>
 
@@ -586,6 +585,24 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ onSave, opacity = 1.
               >
                 Autorizar Microfone Local
               </button>
+            </div>
+
+            <div style={{ ...fieldGroupStyle, marginTop: '8px', padding: '10px', backgroundColor: '#111827', borderRadius: '8px', border: '1px solid #374151' }}>
+              <label style={{ ...labelStyle, color: '#f3f4f6' }}>🎙️ Gravar áudio completo das reuniões</label>
+              <p style={{ fontSize: '11px', color: '#9ca3af', margin: '4px 0 8px 0' }}>
+                Grava a chamada completa (áudio da aba + seu microfone) em WebM/Opus, 100% local no IndexedDB do navegador — nada é enviado à nuvem. Desativado por padrão.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={recordFullAudio}
+                  onChange={e => setRecordFullAudio(e.target.checked)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '13px', color: '#d1d5db' }}>
+                  {recordFullAudio ? 'Ativada (gravará as reuniões localmente)' : 'Desativada'}
+                </span>
+              </div>
             </div>
           </>
         )}

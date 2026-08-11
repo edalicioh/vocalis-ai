@@ -32,6 +32,7 @@ export type MessageType =
   | 'answer.failed'
   | 'metrics.updated'
   | 'status.update'
+  | 'conversation.summary.updated'
   | 'conversation.tone.updated'
   | 'error';
 
@@ -87,7 +88,7 @@ export interface JobDescription {
 // Modos de Reunião Adaptativos — RF-020
 // ============================================================
 
-export type MeetingMode = 'technical_interview' | 'system_design' | 'code_review' | 'general';
+export type MeetingMode = 'technical_interview' | 'system_design' | 'code_review' | 'general' | 'transcription_only';
 
 // ============================================================
 // Definição de Agente — Orquestração da Extensão
@@ -186,6 +187,8 @@ export interface Settings {
   realtimeTranslation?: boolean;
   /** Idioma de destino da tradução (padrão: pt-BR) */
   targetTranslationLanguage?: string;
+  /** Grava o áudio completo da reunião localmente no IndexedDB (padrão: desativado) */
+  recordFullAudio?: boolean;
 }
 
 // ============================================================
@@ -413,10 +416,34 @@ export interface ConversationSummary {
   previousQuestions: string[];
   /** Tecnologias mencionadas */
   technologies: string[];
+  /** Decisões tomadas durante a conversa */
+  decisions: string[];
+  /** Tarefas e itens de ação levantados */
+  actionItems: string[];
   /** Resumo textual */
   summaryText: string;
   /** Timestamp da última atualização */
   lastUpdated: number;
+}
+
+/**
+ * Estado do resumo contínuo da conversa.
+ * `ready` quando há um resumo válido, `generating` enquanto a IA processa,
+ * `idle` quando ainda não há resumo e `error` quando a geração falhou.
+ */
+export type ConversationSummaryStatus = 'idle' | 'generating' | 'ready' | 'error';
+
+export interface ConversationSummaryUpdatePayload {
+  /** Estado atual da geração do resumo */
+  status: ConversationSummaryStatus;
+  /** Resumo estruturado mais recente (vazio/parcial durante `generating`) */
+  summary: ConversationSummary;
+  /** Versão (índice) da última fala final resumida */
+  utteranceVersion: number;
+  /** Indica se este é o resumo final da sessão (ao parar a captura) */
+  isFinal: boolean;
+  /** Mensagem de erro quando status === 'error' */
+  error?: string;
 }
 
 // ============================================================
@@ -455,4 +482,6 @@ export interface SavedConversation {
   transcriptions: Utterance[];
   suggestions: Suggestion[];
   summary?: string;
+  /** Chave (sessionId) da gravação completa no IndexedDB, quando habilitado */
+  audioKey?: string;
 }

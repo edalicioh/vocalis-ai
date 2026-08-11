@@ -20,7 +20,8 @@ const ROTULOS_MODO: Record<MeetingMode, string> = {
   technical_interview: 'entrevista técnica',
   system_design: 'desenho de sistemas',
   code_review: 'revisão de código',
-  general: 'conversa geral'
+  general: 'conversa geral',
+  transcription_only: 'apenas transcrição'
 };
 
 export interface ExternalConversationContext {
@@ -172,6 +173,7 @@ ${JSON.stringify(context)}
         : 'Refinamento externo do tom da conversa',
       prompt,
       responseMode: 'short',
+      purpose: 'analysis',
       signal: controller.signal
     };
 

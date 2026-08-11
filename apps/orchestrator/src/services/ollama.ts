@@ -1,4 +1,5 @@
 import { AnswerProvider, AnswerInput, AnswerEvent } from './answer-provider.js';
+import { buildSystemMessage } from './system-message.js';
 
 export class OllamaProvider implements AnswerProvider {
   private endpoint: string = process.env.OLLAMA_ENDPOINT || 'http://localhost:11434';
@@ -59,6 +60,7 @@ export class OllamaProvider implements AnswerProvider {
         },
         body: JSON.stringify({
           model: this.model,
+          system: buildSystemMessage(input.purpose),
           prompt,
           stream: true
         }),

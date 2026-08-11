@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { MessageSquare, GripVertical, Minus, X, User } from 'lucide-react';
-import { Utterance } from '@conversation-copilot/shared-types';
+import { MessageSquare, GripVertical, Minus, X, User, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Utterance, ConversationSummary, ConversationSummaryStatus } from '@conversation-copilot/shared-types';
 import { WidgetDimensions, WidgetPosition } from '../widget-state';
 
 interface TranscriptionWidgetProps {
@@ -10,6 +10,8 @@ interface TranscriptionWidgetProps {
   onDimensionsChange: (dimensions: WidgetDimensions) => void;
   utterances: Utterance[];
   partialTranscript: string;
+  summary?: ConversationSummary;
+  summaryStatus?: ConversationSummaryStatus;
   onClose: () => void;
   onToggleMinimize: () => void;
   isMinimized: boolean;
@@ -23,6 +25,8 @@ export const TranscriptionWidget: React.FC<TranscriptionWidgetProps> = ({
   onDimensionsChange,
   utterances,
   partialTranscript,
+  summary,
+  summaryStatus = 'idle',
   onClose,
   onToggleMinimize,
   isMinimized,
@@ -202,6 +206,68 @@ export const TranscriptionWidget: React.FC<TranscriptionWidgetProps> = ({
               lineHeight: 1.5
             }}
           >
+            {summaryStatus !== 'idle' && (
+              <div
+                style={{
+                  marginBottom: '12px',
+                  padding: '10px 12px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(34, 197, 94, 0.35)',
+                  backgroundColor: 'rgba(34, 197, 94, 0.08)',
+                  fontSize: '12px',
+                  lineHeight: 1.5
+                }}
+              >
+                {summaryStatus === 'generating' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#86efac' }}>
+                    <Sparkles size={14} className="copilot-pulse" />
+                    <span style={{ fontWeight: 600 }}>Gerando resumo da conversa...</span>
+                  </div>
+                )}
+
+                {summaryStatus === 'error' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fca5a5' }}>
+                    <AlertCircle size={14} />
+                    <span>Não foi possível gerar o resumo da conversa.</span>
+                  </div>
+                )}
+
+                {summaryStatus === 'ready' && summary && summary.summaryText && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#86efac', marginBottom: '6px' }}>
+                      <CheckCircle2 size={14} />
+                      <span style={{ fontWeight: 700, letterSpacing: '0.3px' }}>📝 Pontos da Reunião</span>
+                    </div>
+                    <div style={{ color: '#f8fafc' }}>{summary.summaryText}</div>
+                    {summary.topics.length > 0 && (
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ fontSize: '10px', fontWeight: 700, color: '#86efac', marginBottom: '2px' }}>Temas</div>
+                        {summary.topics.slice(0, 6).map((topic, i) => (
+                          <div key={i} style={{ color: '#cbd5e1' }}>• {topic}</div>
+                        ))}
+                      </div>
+                    )}
+                    {summary.decisions.length > 0 && (
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ fontSize: '10px', fontWeight: 700, color: '#86efac', marginBottom: '2px' }}>Decisões</div>
+                        {summary.decisions.slice(0, 6).map((decision, i) => (
+                          <div key={i} style={{ color: '#cbd5e1' }}>✓ {decision}</div>
+                        ))}
+                      </div>
+                    )}
+                    {summary.actionItems.length > 0 && (
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ fontSize: '10px', fontWeight: 700, color: '#86efac', marginBottom: '2px' }}>Ações / Próximos Passos</div>
+                        {summary.actionItems.slice(0, 6).map((action, i) => (
+                          <div key={i} style={{ color: '#cbd5e1' }}>☐ {action}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {visibleUtterances.length === 0 && !partialTranscript && (
               <div style={{ color: '#64748b', fontSize: '12px', textAlign: 'center', padding: '12px 0' }}>
                 Aguardando fala na reunião...

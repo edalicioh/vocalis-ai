@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-08-11
+
+### Added
+- **Default Disabled Capture & Closed Panels**: Audio capture always initializes disabled (`isCapturing = false`) on meeting load, keeping floating widgets closed until explicitly activated.
+- **Dynamic New Session Renewal**: Starting audio capture generates a fresh dynamic `sessionId` and completely resets prior transcript and suggestion state.
+- **General Meeting & Transcription-Only Modes**: Added `general` and `transcription_only` modes to suppress automatic interview answer generation for casual meetings.
+- **Complete Call Audio Recording**: Dual stream audio mixing (Tab + Microphone) recorded via WebM/Opus `MediaRecorder` into local **IndexedDB** (`CopilotAudioDB`), with privacy toggles and a 🎧 **"Download Audio (.webm)"** button.
+
 ## [1.0.0] - 2026-07-29
 
 ### Added

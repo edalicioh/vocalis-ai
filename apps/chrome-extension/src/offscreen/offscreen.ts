@@ -1,4 +1,11 @@
 import type { AudioSource, SessionRegisterPayload, WSMessage } from '@conversation-copilot/shared-types';
+import {
+  initializeAudioRecording,
+  saveAudioChunk,
+  completeAudioRecording,
+  cleanupOrphanAudioRecordings,
+  MAX_AUDIO_RECORDING_SIZE
+} from './audio-recorder-storage';
 
 const audioSockets: Record<AudioSource, WebSocket | null> = {
   tab: null,
@@ -13,6 +20,22 @@ let audioWorkletNode: AudioWorkletNode | null = null;
 let sentAudioChunks = 0;
 
 let activeSessionId: string | null = null;
+
+// --- Gravação local do áudio completo da chamada (MediaRecorder → IndexedDB) ---
+let recordingDestination: MediaStreamAudioDestinationNode | null = null;
+let mediaRecorder: MediaRecorder | null = null;
+let recordedBytes = 0;
+let recordingTruncated = false;
+let finalizingRecording = false;
+let nextChunkIndex = 0;
+let recordedSessionId: string | null = null;
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueWrite<T>(op: () => Promise<T>): Promise<T> {
+  const result = writeQueue.then(op, op);
+  writeQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
 const vadState: Record<AudioSource, { isAudioActive: boolean; rms: number }> = {
   tab: { isAudioActive: false, rms: 0 },
   microphone: { isAudioActive: false, rms: 0 }
@@ -37,14 +60,16 @@ function connectWebSocket(source: AudioSource) {
 
   const whisperWsUrl = (import.meta as any).env?.VITE_WHISPER_WS_URL || 'ws://localhost:8000/ws/transcribe';
   const orchestratorWsUrl = (import.meta as any).env?.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
-  const wsUrl = (import.meta as any).env?.VITE_DIRECT_WHISPER === 'false' ? orchestratorWsUrl : whisperWsUrl;
+  const useDirectWhisper = (import.meta as any).env?.VITE_DIRECT_WHISPER === 'true';
+  const wsUrl = useDirectWhisper ? whisperWsUrl : orchestratorWsUrl;
+  const destination = useDirectWhisper ? 'Whisper' : 'Orquestrador';
 
   const ws = new WebSocket(wsUrl);
   audioSockets[source] = ws;
   ws.binaryType = 'arraybuffer';
 
   ws.onopen = () => {
-    console.log(`[Offscreen] Canal de áudio ${source} conectado ao Orquestrador.`);
+    console.log(`[Offscreen] Canal de áudio ${source} conectado ao ${destination}.`);
     registerAudioSocket(ws, source);
   };
 
@@ -64,7 +89,7 @@ function connectWebSocket(source: AudioSource) {
 connectWebSocket('tab');
 connectWebSocket('microphone');
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'INIT_AUDIO_CAPTURE' && message.streamId) {
     if (message.sessionId) {
       activeSessionId = message.sessionId;
@@ -75,9 +100,18 @@ chrome.runtime.onMessage.addListener((message) => {
         }
       }
     }
-    startCapture(message.streamId, message.rmsThreshold);
+    void startCapture(message.streamId, message.rmsThreshold, message.enableRecording === true);
   } else if (message.type === 'STOP_AUDIO_CAPTURE') {
-    stopCapture();
+    stopCapture()
+      .then(() => sendResponse({
+        audioKey: recordedSessionId,
+        audioAvailable: recordedSessionId !== null
+      }))
+      .catch((err) => {
+        console.error('[Offscreen] Erro ao encerrar a gravação de áudio:', err);
+        sendResponse({ audioKey: null, audioAvailable: false });
+      });
+    return true;
   } else if (message.type === 'SET_RMS_THRESHOLD' && typeof message.rmsThreshold === 'number') {
     if (audioWorkletNode) {
       audioWorkletNode.port.postMessage({ rmsThreshold: message.rmsThreshold });
@@ -85,9 +119,9 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
-async function startCapture(streamId: string, initialRmsThreshold?: number) {
+async function startCapture(streamId: string, initialRmsThreshold?: number, enableRecording = false) {
   try {
-    stopCapture(false);
+    await stopCapture(false);
 
     // 1. Obter o fluxo da aba (áudio da reunião / entrevistador)
     tabStream = await navigator.mediaDevices.getUserMedia({
@@ -146,6 +180,7 @@ async function startCapture(streamId: string, initialRmsThreshold?: number) {
         const isAudioActive = vadState.tab.isAudioActive || vadState.microphone.isAudioActive;
         chrome.runtime.sendMessage({
           type: 'AUDIO_VAD_STATE',
+          sessionId: activeSessionId,
           isAudioActive,
           rms: Math.max(vadState.tab.rms, vadState.microphone.rms)
         }).catch(() => {});
@@ -179,14 +214,156 @@ async function startCapture(streamId: string, initialRmsThreshold?: number) {
 
     audioWorkletNode.connect(audioContext.destination);
 
+    // 6. Gravação local opcional do áudio completo (MediaRecorder → IndexedDB)
+    if (enableRecording && activeSessionId) {
+      recordedSessionId = null;
+      try {
+        const savedIds = await loadSavedSessionIds();
+        await cleanupOrphanAudioRecordings(savedIds);
+        await setupAudioRecorder();
+      } catch (recErr) {
+        console.warn('[Offscreen] Gravação de áudio local indisponível:', recErr);
+      }
+    }
+
     console.log('[Offscreen] Captura dual (Aba + Microfone) iniciada com sucesso em 16kHz.');
   } catch (err) {
-    stopCapture(false);
+    await stopCapture(false);
     console.error('[Offscreen] Falha ao iniciar captura de áudio:', err);
   }
 }
 
-function stopCapture(log = true) {
+async function loadSavedSessionIds(): Promise<string[]> {
+  try {
+    const res = await chrome.storage.local.get('savedConversations');
+    const list = (res?.savedConversations as Array<{ id?: string }> | undefined) || [];
+    return list.map(c => c.id).filter(Boolean) as string[];
+  } catch {
+    return [];
+  }
+}
+
+function pickRecordingMimeType(): string {
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm'];
+  for (const type of candidates) {
+    if (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  return '';
+}
+
+async function setupAudioRecorder(): Promise<void> {
+  if (!audioContext || !tabSourceNode || !activeSessionId) return;
+
+  recordingDestination = audioContext.createMediaStreamDestination();
+  tabSourceNode.connect(recordingDestination);
+  if (micSourceNode) {
+    micSourceNode.connect(recordingDestination);
+  }
+
+  const options: MediaRecorderOptions = { audioBitsPerSecond: 32000 };
+  const preferredMime = pickRecordingMimeType();
+  if (preferredMime) options.mimeType = preferredMime;
+
+  mediaRecorder = new MediaRecorder(recordingDestination.stream, options);
+  const actualMime = mediaRecorder.mimeType || preferredMime || 'audio/webm';
+  await initializeAudioRecording(activeSessionId, actualMime);
+
+  recordedBytes = 0;
+  recordingTruncated = false;
+  finalizingRecording = false;
+  nextChunkIndex = 0;
+
+  mediaRecorder.ondataavailable = async (e) => {
+    if (finalizingRecording) return;
+    if (!e.data || e.data.size === 0 || !activeSessionId || !mediaRecorder) return;
+    const sessionId = activeSessionId;
+    const index = nextChunkIndex++;
+    try {
+      recordedBytes = await enqueueWrite(() => saveAudioChunk(sessionId, e.data, index));
+    } catch (writeErr) {
+      console.warn('[Offscreen] Falha ao salvar bloco de áudio local:', writeErr);
+    }
+    if (recordedBytes >= MAX_AUDIO_RECORDING_SIZE) {
+      recordingTruncated = true;
+      try {
+        mediaRecorder?.stop();
+      } catch {
+        // Recorder já inativo
+      }
+    }
+  };
+
+  mediaRecorder.start(10000);
+}
+
+async function stopAndFinalizeRecorder(): Promise<void> {
+  const recorder = mediaRecorder;
+  const sessionId = activeSessionId;
+  if (!recorder || !sessionId) return;
+
+  finalizingRecording = true;
+  let finalChunk: Blob | null = null;
+
+  if (recorder.state !== 'inactive') {
+    const chunkPromise = new Promise<Blob | null>((resolve) => {
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve(null);
+        }
+      }, 5000);
+      const onData = (e: BlobEvent) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(e.data && e.data.size > 0 ? e.data : null);
+      };
+      recorder.addEventListener('dataavailable', onData, { once: true });
+      try {
+        recorder.stop();
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (!settled) {
+          settled = true;
+          resolve(null);
+        }
+      }
+    });
+    finalChunk = await chunkPromise;
+  }
+
+  if (finalChunk) {
+    const index = nextChunkIndex++;
+    try {
+      recordedBytes = await enqueueWrite(() => saveAudioChunk(sessionId, finalChunk!, index));
+    } catch (writeErr) {
+      console.warn('[Offscreen] Falha ao salvar bloco final de áudio local:', writeErr);
+    }
+  }
+
+  await writeQueue.catch(() => {});
+
+  try {
+    await completeAudioRecording(sessionId, { truncated: recordingTruncated });
+    recordedSessionId = sessionId;
+  } catch (finalErr) {
+    console.warn('[Offscreen] Falha ao finalizar a gravação de áudio local:', finalErr);
+    recordedSessionId = null;
+  }
+
+  mediaRecorder = null;
+  if (recordingDestination) {
+    recordingDestination.disconnect();
+    recordingDestination = null;
+  }
+}
+
+async function stopCapture(log = true) {
+  await stopAndFinalizeRecorder();
+
   vadState.tab = { isAudioActive: false, rms: 0 };
   vadState.microphone = { isAudioActive: false, rms: 0 };
   if (audioWorkletNode) {

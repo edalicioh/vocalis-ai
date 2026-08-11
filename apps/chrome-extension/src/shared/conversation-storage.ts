@@ -1,6 +1,41 @@
-import { SavedConversation, StructuredAnswer } from '@conversation-copilot/shared-types';
+import { SavedConversation, StructuredAnswer, ConversationSummary } from '@conversation-copilot/shared-types';
 
 const STORAGE_KEY = 'savedConversations';
+
+/**
+ * Serializa o snapshot estruturado do resumo (RF-018) em Markdown compacto
+ * para armazenamento e exportação.
+ */
+export function serializeConversationSummary(summary: ConversationSummary): string {
+  const lines: string[] = [];
+  lines.push(`## 📝 Resumo da Conversa`);
+  lines.push(``);
+  lines.push(summary.summaryText || 'Sem resumo textual.');
+  lines.push(``);
+
+  if (summary.topics.length > 0) {
+    lines.push(`**Temas:**`);
+    summary.topics.forEach(t => lines.push(`- ${t}`));
+    lines.push(``);
+  }
+  if (summary.decisions.length > 0) {
+    lines.push(`**Decisões:**`);
+    summary.decisions.forEach(d => lines.push(`- ${d}`));
+    lines.push(``);
+  }
+  if (summary.actionItems.length > 0) {
+    lines.push(`**Ações / Próximos Passos:**`);
+    summary.actionItems.forEach(a => lines.push(`- [ ] ${a}`));
+    lines.push(``);
+  }
+  if (summary.previousQuestions.length > 0) {
+    lines.push(`**Perguntas:**`);
+    summary.previousQuestions.forEach(q => lines.push(`- ${q}`));
+    lines.push(``);
+  }
+
+  return lines.join('\n').trim();
+}
 
 /**
  * Salva ou atualiza uma reunião no banco local da extensão (chrome.storage.local).
@@ -107,6 +142,47 @@ export async function deleteConversation(id: string): Promise<void> {
 }
 
 /**
+ * Vincula a chave do áudio gravado (sessionId) a uma reunião já salva,
+ * permitindo exibir o botão de download mesmo quando a conversa foi
+ * salva antes do encerramento da gravação.
+ */
+export async function patchConversationAudioKey(sessionId: string, audioKey: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      if (!chrome?.storage?.local) {
+        resolve();
+        return;
+      }
+
+      chrome.storage.local.get([STORAGE_KEY], (result) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+          return;
+        }
+
+        const existing: SavedConversation[] = result[STORAGE_KEY] || [];
+        const index = existing.findIndex(item => item.id === sessionId);
+
+        if (index >= 0) {
+          existing[index] = { ...existing[index], audioKey };
+          chrome.storage.local.set({ [STORAGE_KEY]: existing }, () => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve();
+            }
+          });
+        } else {
+          resolve();
+        }
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/**
  * Formata os dados da conversa em um documento Markdown (.md) estruturado.
  */
 export function exportToMarkdown(conv: SavedConversation): string {
@@ -122,6 +198,14 @@ export function exportToMarkdown(conv: SavedConversation): string {
   lines.push(``);
   lines.push(`---`);
   lines.push(``);
+
+  // Resumo da conversa (RF-018)
+  if (conv.summary) {
+    lines.push(conv.summary);
+    lines.push(``);
+    lines.push(`---`);
+    lines.push(``);
+  }
 
   // Transcrição
   lines.push(`## 💬 Transcrição ao Vivo`);

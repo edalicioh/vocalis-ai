@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { SettingsForm } from '../shared/settings-form';
 import { SavedConversation } from '@conversation-copilot/shared-types';
 import { getSavedConversations, deleteConversation, triggerMarkdownDownload } from '../shared/conversation-storage';
+import { getCompleteAudioBlob, listCompleteAudioRecordingIds, deleteAudioRecording } from '../offscreen/audio-recorder-storage';
 
 type Tab = 'settings' | 'history';
 
@@ -14,11 +15,16 @@ const OptionsPage: React.FC = () => {
   const [conversations, setConversations] = useState<SavedConversation[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [audioKeys, setAudioKeys] = useState<Set<string>>(new Set());
 
   const loadHistory = async () => {
     setLoading(true);
-    const list = await getSavedConversations();
+    const [list, audioIds] = await Promise.all([
+      getSavedConversations(),
+      listCompleteAudioRecordingIds().catch(() => [] as string[])
+    ]);
     setConversations(list);
+    setAudioKeys(new Set(audioIds));
     setLoading(false);
   };
 
@@ -30,8 +36,32 @@ const OptionsPage: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta conversa do banco local?')) {
-      await deleteConversation(id);
+      await Promise.all([
+        deleteConversation(id),
+        deleteAudioRecording(id).catch(() => {})
+      ]);
       loadHistory();
+    }
+  };
+
+  const handleDownloadAudio = async (conv: SavedConversation) => {
+    try {
+      const blob = await getCompleteAudioBlob(conv.id);
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const d = new Date(conv.timestamp);
+      const formattedDate = d.toISOString().slice(0, 10);
+      const filename = `copilot-audio-${formattedDate}-${conv.id.slice(-5)}.webm`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error('[Options] Falha ao baixar o áudio da reunião:', err);
     }
   };
 
@@ -127,7 +157,7 @@ const OptionsPage: React.FC = () => {
               <div>
                 <h2 style={{ margin: 0, fontSize: '18px', color: '#f8fafc' }}>📚 Reuniões Salvas no Banco Local</h2>
                 <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#94a3b8' }}>
-                  Suas reuniões são salvas localmente no navegador (`chrome.storage.local`). Pesquise por palavras-chave ou baixe em Markdown (.md).
+                  Suas reuniões são salvas localmente no navegador: textos em `chrome.storage.local` e áudios gravados no IndexedDB. Pesquise por palavras-chave ou baixe em Markdown (.md).
                 </p>
               </div>
               <button onClick={loadHistory} style={refreshButtonStyle}>
@@ -176,6 +206,15 @@ const OptionsPage: React.FC = () => {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {audioKeys.has(conv.id) && (
+                        <button
+                          onClick={() => handleDownloadAudio(conv)}
+                          style={audioBtnStyle}
+                          title="Baixar a gravação completa da chamada (WebM/Opus)"
+                        >
+                          🎧 Baixar Áudio (.webm)
+                        </button>
+                      )}
                       <button
                         onClick={() => triggerMarkdownDownload(conv)}
                         style={downloadBtnStyle}
@@ -308,6 +347,17 @@ const refreshButtonStyle: React.CSSProperties = {
 
 const downloadBtnStyle: React.CSSProperties = {
   backgroundColor: '#16a34a',
+  color: '#ffffff',
+  border: 'none',
+  padding: '8px 14px',
+  borderRadius: '6px',
+  fontSize: '12px',
+  fontWeight: 600,
+  cursor: 'pointer'
+};
+
+const audioBtnStyle: React.CSSProperties = {
+  backgroundColor: '#7c3aed',
   color: '#ffffff',
   border: 'none',
   padding: '8px 14px',

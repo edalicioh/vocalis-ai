@@ -5,6 +5,7 @@ import { ProviderManager } from '../providers/provider-manager.js';
 import { AgentRouter } from '../agents/agent-router.js';
 import { GeminiProvider } from '../providers/gemini.provider.js';
 import { OllamaProvider } from '../providers/ollama.provider.js';
+import { normalizeMeetingMode } from '../shared/meeting-mode.js';
 
 describe('Orquestração Client-Side (Chrome Extension)', () => {
   describe('QuestionDetector', () => {
@@ -61,6 +62,47 @@ describe('Orquestração Client-Side (Chrome Extension)', () => {
 
       const history = contextManager.buildHistoryContext();
       expect(history).toContain('Entrevistador: Qual o seu banco de dados favorito?');
+    });
+
+    it('deve limpar o histórico ao iniciar uma nova sessão', () => {
+      contextManager.addUtterance({
+        id: 'sessao-anterior',
+        speaker: 'interviewer',
+        text: 'Pergunta da sessão anterior',
+        timestamp: Date.now(),
+        isFinal: true
+      });
+
+      contextManager.clearHistory();
+
+      expect(contextManager.getRecentUtterances()).toEqual([]);
+      expect(contextManager.buildHistoryContext()).not.toContain('Pergunta da sessão anterior');
+    });
+
+    it('deve considerar o modo general como passivo (sem detecção automática)', () => {
+      expect(contextManager.isPassiveMode()).toBe(false);
+
+      contextManager.setMeetingMode('general');
+      expect(contextManager.isPassiveMode()).toBe(true);
+
+      contextManager.setMeetingMode('code_review');
+      expect(contextManager.isPassiveMode()).toBe(false);
+    });
+
+    it('deve injetar diretriz de transcrição passiva no prompt do modo general', () => {
+      contextManager.setMeetingMode('general');
+      const prompt = contextManager.buildSystemPrompt();
+      expect(prompt).toContain('MODO: REUNIÃO GERAL & ALINHAMENTO (TRANSCRIÇÃO PASSIVA).');
+    });
+  });
+
+  describe('normalizeMeetingMode', () => {
+    it('deve normalizar valores legados e inválidos', () => {
+      expect(normalizeMeetingMode('transcription_only')).toBe('general');
+      expect(normalizeMeetingMode('general')).toBe('general');
+      expect(normalizeMeetingMode('system_design')).toBe('system_design');
+      expect(normalizeMeetingMode('modo-inexistente')).toBe('technical_interview');
+      expect(normalizeMeetingMode('')).toBe('technical_interview');
     });
   });
 

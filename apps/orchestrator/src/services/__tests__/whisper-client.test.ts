@@ -55,6 +55,22 @@ describe('WhisperClient', () => {
     });
   });
 
+  it('deve notificar mudanças no estado da conexão', async () => {
+    const { server, port: testPort } = await createTestServer();
+    wss = server;
+    const statusChanges: boolean[] = [];
+
+    client = new WhisperClient(`ws://localhost:${testPort}`, 'interviewer');
+    client.connect(() => {}, connected => statusChanges.push(connected));
+
+    await vi.waitFor(() => {
+      expect(statusChanges).toContain(true);
+    });
+
+    client.disconnect();
+    expect(statusChanges[statusChanges.length - 1]).toBe(false);
+  });
+
   it('deve receber e converter eventos transcript.final em Utterance', async () => {
     const { server, port: testPort } = await createTestServer();
     wss = server;

@@ -39,6 +39,8 @@ export interface AnswerInput {
   prompt: string;
   /** Modo de resposta selecionado */
   responseMode: ResponseMode;
+  /** Finalidade da geração (resposta, sumarização ou análise) */
+  purpose?: 'answer' | 'summary' | 'analysis';
   /** Perfil profissional do candidato (RF-015) */
   userProfile?: UserProfile;
   /** Descrição e requisitos da vaga (RF-016) */

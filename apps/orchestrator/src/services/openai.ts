@@ -1,4 +1,5 @@
 import { AnswerProvider, AnswerInput, AnswerEvent } from './answer-provider.js';
+import { buildSystemMessage } from './system-message.js';
 
 export class OpenAIProvider implements AnswerProvider {
   private apiKey: string = '';
@@ -65,7 +66,7 @@ export class OpenAIProvider implements AnswerProvider {
         body: JSON.stringify({
           model: this.model,
           messages: [
-            { role: 'system', content: 'Você é um assistente técnico em entrevistas de emprego. Responda em Português do Brasil.' },
+            { role: 'system', content: buildSystemMessage(input.purpose) },
             { role: 'user', content: prompt }
           ],
           stream: true

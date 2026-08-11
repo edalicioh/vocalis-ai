@@ -1,4 +1,5 @@
 import { AnswerProvider, AnswerInput, AnswerEvent } from './answer-provider.js';
+import { buildSystemMessage } from './system-message.js';
 
 export class AnthropicProvider implements AnswerProvider {
   private apiKey: string = '';
@@ -67,6 +68,7 @@ export class AnthropicProvider implements AnswerProvider {
         body: JSON.stringify({
           model: this.model,
           max_tokens: 1024,
+          system: buildSystemMessage(input.purpose),
           messages: [
             { role: 'user', content: prompt }
           ],

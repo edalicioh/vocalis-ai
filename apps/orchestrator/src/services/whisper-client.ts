@@ -9,6 +9,10 @@ export interface TranscriptionCallback {
   (utterance: Utterance): void;
 }
 
+export interface ConnectionStatusCallback {
+  (connected: boolean): void;
+}
+
 /**
  * Cliente WebSocket que conecta o Orquestrador ao serviço Whisper (services/whisper/).
  * 
@@ -21,6 +25,7 @@ export class WhisperClient {
   private ws: WebSocket | null = null;
   private isConnected: boolean = false;
   private onTranscriptionCallback: TranscriptionCallback | null = null;
+  private onConnectionStatusCallback: ConnectionStatusCallback | null = null;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect: boolean = true;
   private pendingResetAcks: number = 0;
@@ -32,8 +37,9 @@ export class WhisperClient {
     private speaker: Utterance['speaker'] = 'unknown'
   ) {}
 
-  public connect(onTranscription: TranscriptionCallback) {
+  public connect(onTranscription: TranscriptionCallback, onConnectionStatus?: ConnectionStatusCallback) {
     this.onTranscriptionCallback = onTranscription;
+    this.onConnectionStatusCallback = onConnectionStatus || null;
     this.shouldReconnect = true;
     this.doConnect();
   }
@@ -43,7 +49,7 @@ export class WhisperClient {
       this.ws = new WebSocket(this.url);
 
       this.ws.on('open', () => {
-        this.isConnected = true;
+        this.setConnectionStatus(true);
         this.pendingResetAcks = 0;
         console.log('[WhisperClient] Conectado ao serviço de transcrição (services/whisper/).');
         for (const chunk of this.pendingAudioChunks) {
@@ -91,7 +97,7 @@ export class WhisperClient {
       });
 
       this.ws.on('close', () => {
-        this.isConnected = false;
+        this.setConnectionStatus(false);
         console.log('[WhisperClient] Conexão com serviço de transcrição encerrada.');
         this.scheduleReconnect();
       });
@@ -100,6 +106,7 @@ export class WhisperClient {
         console.warn('[WhisperClient] Erro no WebSocket:', err.message);
       });
     } catch (e) {
+      this.setConnectionStatus(false);
       console.error('[WhisperClient] Falha ao conectar ao serviço de transcrição:', e);
       this.scheduleReconnect();
     }
@@ -153,6 +160,12 @@ export class WhisperClient {
     return this.isConnected;
   }
 
+  private setConnectionStatus(connected: boolean) {
+    if (this.isConnected === connected) return;
+    this.isConnected = connected;
+    this.onConnectionStatusCallback?.(connected);
+  }
+
   /**
    * Desconecta do serviço Whisper sem reconectar.
    * Usado no encerramento de sessão (RF-002).
@@ -167,7 +180,7 @@ export class WhisperClient {
       this.ws.close();
       this.ws = null;
     }
-    this.isConnected = false;
+    this.setConnectionStatus(false);
     this.pendingAudioChunks = [];
   }
 }

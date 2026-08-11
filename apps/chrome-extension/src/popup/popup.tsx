@@ -32,11 +32,11 @@ const PopupSettings: React.FC = () => {
     });
   }, []);
 
-  const notifyCaptureState = (isActive: boolean) => {
+  const notifyCaptureState = (isActive: boolean, sessionId?: string) => {
     if (!activeTabId) return;
     chrome.tabs.sendMessage(
       activeTabId,
-      { type: 'CAPTURE_STATE_CHANGED', isCapturing: isActive },
+      { type: 'CAPTURE_STATE_CHANGED', isCapturing: isActive, sessionId },
       () => void chrome.runtime.lastError
     );
   };
@@ -66,7 +66,7 @@ const PopupSettings: React.FC = () => {
 
   const startCapture = (activatedNow: boolean) => {
     if (!activeTabId) return;
-    chrome.tabs.sendMessage(activeTabId, { type: 'GET_COPILOT_SESSION' }, (sessionResponse) => {
+    chrome.tabs.sendMessage(activeTabId, { type: 'CREATE_COPILOT_SESSION' }, (sessionResponse) => {
       if (chrome.runtime.lastError || !sessionResponse?.sessionId) {
         setCapturePending(false);
         setCaptureError('A sessão do Copiloto ainda não está pronta. Atualize a página e tente novamente.');
@@ -86,7 +86,7 @@ const PopupSettings: React.FC = () => {
 
           if (response?.status === 'ok') {
             setIsCapturing(true);
-            notifyCaptureState(true);
+            notifyCaptureState(true, response.sessionId || sessionResponse.sessionId);
           } else {
             setCaptureError(response?.error || 'Não foi possível iniciar a captura de áudio.');
             if (activatedNow) togglePageActivation(() => undefined);
@@ -147,8 +147,8 @@ const PopupSettings: React.FC = () => {
           {isCapturing
             ? 'Captura ativa. A transcrição está sendo enviada ao Copiloto.'
             : pageStatus?.isMounted
-              ? 'Copiloto ativo. Inicie a captura de áudio quando estiver pronto.'
-              : 'Ative o Copiloto e inicie a captura de áudio em uma única ação.'}
+              ? 'Captura desativada. Inicie a captura de áudio quando estiver pronto.'
+              : 'Captura desativada. Ative o Copiloto e inicie a captura em uma única ação.'}
         </div>
         <button
           onClick={handlePrimaryAction}

@@ -136,10 +136,10 @@ export function loadWidgetStates(): WidgetStatesMap {
       const parsed = JSON.parse(raw);
       const defaults = getDefaultStates();
       return {
-        status: parsed.status ?? defaults.status,
-        response: parsed.response ?? defaults.response,
-        functionBar: parsed.functionBar ?? defaults.functionBar,
-        transcription: parsed.transcription ?? defaults.transcription
+        status: { ...defaults.status, ...parsed.status, visible: false },
+        response: { ...defaults.response, ...parsed.response, visible: false },
+        functionBar: { ...defaults.functionBar, ...parsed.functionBar, visible: true },
+        transcription: { ...defaults.transcription, ...parsed.transcription, visible: false }
       };
     }
   } catch {

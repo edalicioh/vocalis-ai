@@ -47,4 +47,23 @@ describe('Meeting Modes & Adaptive System Prompts', () => {
       expect(prompt).toContain('=== DIRETRIZ DO MODO DE REUNIÃO ATIVO ===');
     });
   });
+
+  it('deve considerar o modo general como passivo (sem detecção automática de perguntas)', () => {
+    expect(cm.isPassiveMode()).toBe(false);
+
+    cm.setMeetingMode('general');
+    expect(cm.isPassiveMode()).toBe(true);
+
+    cm.setMeetingMode('technical_interview');
+    expect(cm.isPassiveMode()).toBe(false);
+  });
+
+  it('deve injetar diretriz de transcrição passiva no prompt do modo general', () => {
+    cm.setMeetingMode('general');
+    const prompt = cm.buildPromptPayload('O que acharam da priorização?');
+
+    expect(prompt).toContain('MODO: REUNIÃO GERAL & ALINHAMENTO (TRANSCRIÇÃO PASSIVA).');
+    expect(prompt).toContain('Não assuma o papel de um candidato em entrevista técnica.');
+    expect(prompt).toContain('Action Items');
+  });
 });

@@ -16,9 +16,12 @@ import {
   ToneUpdatePayload,
   ConversationTone,
   MeetingMode,
+  ConversationSummary,
+  ConversationSummaryStatus,
+  ConversationSummaryUpdatePayload,
   UiLanguage
 } from '@conversation-copilot/shared-types';
-import { saveConversation, triggerMarkdownDownload } from '../shared/conversation-storage';
+import { saveConversation, triggerMarkdownDownload, serializeConversationSummary, patchConversationAudioKey } from '../shared/conversation-storage';
 import {
   WidgetId,
   WidgetDimensions,
@@ -40,188 +43,36 @@ import {
 import { FunctionBarWidget } from './widgets/FunctionBarWidget';
 import { ResponsePanelWidget } from './widgets/ResponsePanelWidget';
 import { TranscriptionWidget } from './widgets/TranscriptionWidget';
+import { createSessionId } from './session-id';
+import { normalizeMeetingMode } from '../shared/meeting-mode';
 
 const speechManager = new SpeechManager();
 
-interface CopilotOverlayProps {
-  tabSessionId: string;
-}
-
-export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) => {
-
-  // --- Estados e Posições dos Widgets HUD ---
-  const [widgetPositions, setWidgetPositions] = useState<WidgetPositionsMap>(loadWidgetPositions);
-  const [widgetDimensions, setWidgetDimensions] = useState<WidgetDimensionsMap>(loadWidgetDimensions);
-  const [widgetStates, setWidgetStates] = useState<WidgetStatesMap>(loadWidgetStates);
-  const [hudLayoutMode, setHudLayoutMode] = useState<HUDLayoutMode>(loadHUDLayoutMode);
-
-  // --- Modal de Configurações ---
-  const [showSettings, setShowSettings] = useState(false);
-  const [opacity, setOpacity] = useState<number>(loadOpacity);
-
-  // --- Transcrição, Pergunta e Sugestões ---
-  const [status, setStatus] = useState<StatusUpdatePayload>({
-    whisperConnected: true,
-    llmConfigured: true,
-    isCapturing: false
-  });
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [captureError, setCaptureError] = useState<string | null>(null);
-  const [transcriptions, setTranscriptions] = useState<Utterance[]>([]);
-  const [partialTranscript, setPartialTranscript] = useState<string>('');
-  const [completedSuggestions, setCompletedSuggestions] = useState<Suggestion[]>([]);
-  const [activeSuggestion, setActiveSuggestion] = useState<Suggestion | null>(null);
-  const [detectedQuestion, setDetectedQuestion] = useState<QuestionDetectionResult | null>(null);
-
-  // --- Tom da Conversa ---
-  const [tone, setTone] = useState<ConversationTone>('neutro');
-  const [toneConfidence, setToneConfidence] = useState<number>(0.5);
-  const [toneSummary, setToneSummary] = useState<string>('');
-
-  // --- Modo de Reunião e Idioma ---
-  const [meetingMode, setMeetingMode] = useState<MeetingMode>(() => {
-    return (localStorage.getItem('copilotMeetingMode') as MeetingMode) || 'technical_interview';
-  });
-
-  const [uiLanguage, setUiLanguage] = useState<UiLanguage>(() => {
-    return (localStorage.getItem('copilotUiLanguage') as UiLanguage) || 'pt-BR';
-  });
-
-  const [isAudioActive, setIsAudioActive] = useState(false);
-
-  const handleChangeMeetingMode = (newMode: MeetingMode) => {
-    setMeetingMode(newMode);
-    localStorage.setItem('copilotMeetingMode', newMode);
-    const storedNotes = localStorage.getItem('copilotModeNotes');
-    let modeNotes = {};
-    if (storedNotes) {
-      try { modeNotes = JSON.parse(storedNotes); } catch (e) {}
-    }
-    sendWsMessage({
-      type: 'settings.update',
-      payload: { meetingMode: newMode, modeNotes }
-    });
-  };
-
-  // --- TTS State ---
-  const [isTtsMuted, setIsTtsMuted] = useState(false);
-  const [ttsRate, setTtsRate] = useState(1.0);
-  const [isTtsSpeaking, setIsTtsSpeaking] = useState(false);
-  const [activeSentenceIndex, setActiveSentenceIndex] = useState<number | null>(null);
-
-  const wsRef = useRef<WebSocket | null>(null);
-
-  // ========= Handlers de Posição e Estado =========
-
-  const updateWidgetPosition = (id: WidgetId, pos: { x: number; y: number }) => {
-    setWidgetPositions(prev => {
-      const next = { ...prev, [id]: pos };
-      saveWidgetPositions(next);
-      return next;
-    });
-  };
-
-  const updateWidgetDimensions = (id: WidgetId, dimensions: WidgetDimensions) => {
-    setWidgetDimensions(prev => {
-      const next = { ...prev, [id]: dimensions };
-      saveWidgetDimensions(next);
-      return next;
-    });
-  };
-
-  const updateWidgetVisibility = (id: WidgetId, visible: boolean) => {
-    setWidgetStates(prev => {
-      const next = { ...prev, [id]: { ...prev[id], visible } };
-      saveWidgetStates(next);
-      return next;
-    });
-  };
-
-  const toggleWidgetMinimized = (id: WidgetId) => {
-    setWidgetStates(prev => {
-      const next = { ...prev, [id]: { ...prev[id], minimized: !prev[id].minimized } };
-      saveWidgetStates(next);
-      return next;
-    });
-  };
-
-  const handleChangeHudMode = (mode: HUDLayoutMode) => {
-    setHudLayoutMode(mode);
-    saveHUDLayoutMode(mode);
-
-    if (mode === 'default') {
-      setWidgetStates(prev => {
-        const next = {
-          ...prev,
-          response: { visible: true, minimized: false },
-          transcription: { visible: true, minimized: false }
-        };
-        saveWidgetStates(next);
-        return next;
-      });
-    } else if (mode === 'compact') {
-      setWidgetStates(prev => {
-        const next = {
-          ...prev,
-          response: { visible: true, minimized: true },
-          transcription: { visible: false, minimized: false }
-        };
-        saveWidgetStates(next);
-        return next;
-      });
-    } else if (mode === 'reading') {
-      setWidgetStates(prev => {
-        const next = {
-          ...prev,
-          response: { visible: true, minimized: false },
-          transcription: { visible: true, minimized: false }
-        };
-        saveWidgetStates(next);
-        return next;
-      });
-    } else if (mode === 'keywords') {
-      setWidgetStates(prev => {
-        const next = {
-          ...prev,
-          response: { visible: true, minimized: false },
-          transcription: { visible: false, minimized: false }
-        };
-  SavedConversation,
-  ToneUpdatePayload,
-  ConversationTone,
-  MeetingMode,
-  UiLanguage
-} from '@conversation-copilot/shared-types';
-import { saveConversation, triggerMarkdownDownload } from '../shared/conversation-storage';
-import {
-  WidgetId,
-  WidgetDimensions,
-  WidgetDimensionsMap,
-  WidgetPositionsMap,
-  WidgetStatesMap,
-  HUDLayoutMode,
-  loadWidgetPositions,
-  saveWidgetPositions,
-  loadWidgetDimensions,
-  saveWidgetDimensions,
-  loadWidgetStates,
-  saveWidgetStates,
-  loadHUDLayoutMode,
-  saveHUDLayoutMode,
-  loadOpacity,
-  saveOpacity
-} from './widget-state';
-import { FunctionBarWidget } from './widgets/FunctionBarWidget';
-import { ResponsePanelWidget } from './widgets/ResponsePanelWidget';
-import { TranscriptionWidget } from './widgets/TranscriptionWidget';
-
-const speechManager = new SpeechManager();
+const EMPTY_SUMMARY: ConversationSummary = {
+  topics: [],
+  previousQuestions: [],
+  technologies: [],
+  decisions: [],
+  actionItems: [],
+  summaryText: '',
+  lastUpdated: 0
+};
 
 interface CopilotOverlayProps {
   tabSessionId: string;
+  externalCaptureState?: boolean;
+  createTabSessionId?: () => string;
+  onSessionIdChange?: (sessionId: string) => void;
+  onCaptureStateChange?: (isCapturing: boolean) => void;
 }
 
-export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) => {
+export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({
+  tabSessionId,
+  externalCaptureState,
+  createTabSessionId,
+  onSessionIdChange,
+  onCaptureStateChange
+}) => {
 
   // --- Estados e Posições dos Widgets HUD ---
   const [widgetPositions, setWidgetPositions] = useState<WidgetPositionsMap>(loadWidgetPositions);
@@ -240,7 +91,14 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
     isCapturing: false
   });
   const [isCapturing, setIsCapturing] = useState(false);
+  const isCapturingRef = useRef(false);
+  const [isCapturePending, setIsCapturePending] = useState(false);
+  const capturePendingRef = useRef(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  // --- Gravação local do áudio completo (audioKey = sessionId no IndexedDB) ---
+  const audioKeyRef = useRef<string | null>(null);
+  const savedSessionIdRef = useRef<string | null>(null);
+  const [audioRecordingActive, setAudioRecordingActive] = useState(false);
   const [transcriptions, setTranscriptions] = useState<Utterance[]>([]);
   const [partialTranscript, setPartialTranscript] = useState<string>('');
   const [completedSuggestions, setCompletedSuggestions] = useState<Suggestion[]>([]);
@@ -252,9 +110,17 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
   const [toneConfidence, setToneConfidence] = useState<number>(0.5);
   const [toneSummary, setToneSummary] = useState<string>('');
 
+  // --- Resumo Contínuo da Conversa (RF-018) ---
+  const [summaryStatus, setSummaryStatus] = useState<ConversationSummaryStatus>('idle');
+  const [summary, setSummary] = useState<ConversationSummary>(EMPTY_SUMMARY);
+
   // --- Modo de Reunião e Idioma ---
   const [meetingMode, setMeetingMode] = useState<MeetingMode>(() => {
-    return (localStorage.getItem('copilotMeetingMode') as MeetingMode) || 'technical_interview';
+    try {
+      return normalizeMeetingMode(localStorage.getItem('copilotMeetingMode'));
+    } catch (e) {
+      return 'technical_interview';
+    }
   });
 
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(() => {
@@ -265,7 +131,14 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
 
   const handleChangeMeetingMode = (newMode: MeetingMode) => {
     setMeetingMode(newMode);
-    localStorage.setItem('copilotMeetingMode', newMode);
+    try {
+      localStorage.setItem('copilotMeetingMode', newMode);
+    } catch (e) {}
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.set({ meetingMode: newMode });
+      }
+    } catch (e) {}
     const storedNotes = localStorage.getItem('copilotModeNotes');
     let modeNotes = {};
     if (storedNotes) {
@@ -284,6 +157,8 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
   const [activeSentenceIndex, setActiveSentenceIndex] = useState<number | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const sessionIdRef = useRef(tabSessionId);
+  const pendingSessionStartRef = useRef<string | null>(null);
 
   // ========= Handlers de Posição e Estado =========
 
@@ -304,6 +179,8 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
   };
 
   const updateWidgetVisibility = (id: WidgetId, visible: boolean) => {
+    if (visible && (id === 'response' || id === 'transcription') && !isCapturingRef.current) return;
+
     setWidgetStates(prev => {
       const next = { ...prev, [id]: { ...prev[id], visible } };
       saveWidgetStates(next);
@@ -322,13 +199,14 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
   const handleChangeHudMode = (mode: HUDLayoutMode) => {
     setHudLayoutMode(mode);
     saveHUDLayoutMode(mode);
+    const showCapturePanels = isCapturingRef.current;
 
     if (mode === 'default') {
       setWidgetStates(prev => {
         const next = {
           ...prev,
-          response: { visible: true, minimized: false },
-          transcription: { visible: true, minimized: false }
+          response: { visible: showCapturePanels, minimized: false },
+          transcription: { visible: showCapturePanels, minimized: false }
         };
         saveWidgetStates(next);
         return next;
@@ -337,7 +215,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
       setWidgetStates(prev => {
         const next = {
           ...prev,
-          response: { visible: true, minimized: true },
+          response: { visible: showCapturePanels, minimized: true },
           transcription: { visible: false, minimized: false }
         };
         saveWidgetStates(next);
@@ -347,8 +225,8 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
       setWidgetStates(prev => {
         const next = {
           ...prev,
-          response: { visible: true, minimized: false },
-          transcription: { visible: true, minimized: false }
+          response: { visible: showCapturePanels, minimized: false },
+          transcription: { visible: showCapturePanels, minimized: false }
         };
         saveWidgetStates(next);
         return next;
@@ -357,7 +235,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
       setWidgetStates(prev => {
         const next = {
           ...prev,
-          response: { visible: true, minimized: false },
+          response: { visible: showCapturePanels, minimized: false },
           transcription: { visible: false, minimized: false }
         };
         saveWidgetStates(next);
@@ -372,7 +250,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
     connectWebSocket();
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
-        chrome.runtime.sendMessage({ type: 'REGISTER_TAB_SESSION', sessionId: tabSessionId }).catch(() => {});
+        chrome.runtime.sendMessage({ type: 'REGISTER_TAB_SESSION', sessionId: sessionIdRef.current }).catch(() => {});
       }
     } catch {
       // Ignorar se o contexto da extensão foi invalidado ao recarregar
@@ -392,30 +270,14 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
     };
 
     const handleCaptureStateChange = (event: Event) => {
-      const { isCapturing: nextCapturing } = (event as CustomEvent<{ isCapturing: boolean }>).detail;
-      setIsCapturing(nextCapturing);
-      setCaptureError(null);
-
-      if (nextCapturing) {
-        setWidgetStates(prev => {
-          const next = {
-            ...prev,
-            functionBar: { ...prev.functionBar, visible: true },
-            transcription: { visible: true, minimized: false },
-            response: { visible: true, minimized: false }
-          };
-          saveWidgetStates(next);
-          return next;
-        });
-        sendWsMessage({ type: 'session.start', payload: {} });
-      } else {
-        sendWsMessage({ type: 'session.stop', payload: {} });
-      }
+      const detail = (event as CustomEvent<{ isCapturing: boolean; sessionId?: string }>).detail;
+      handleExternalCaptureState(detail.isCapturing, detail.sessionId);
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && (e.key === 'c' || e.key === 'C')) {
         e.preventDefault();
+        if (!isCapturingRef.current) return;
         setWidgetStates(prev => {
           const anyVisible = prev.response.visible || prev.transcription.visible;
           const next = {
@@ -441,7 +303,192 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
         sendWsMessage({ type: 'settings.update', payload: msg.payload });
       }
     };
+
+    chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+    window.addEventListener('copilot:force-trigger', handleForceTrigger);
+    window.addEventListener('copilot:capture-state-changed', handleCaptureStateChange);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      wsRef.current?.close();
+      speechManager.cancel();
+      chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
+      window.removeEventListener('copilot:force-trigger', handleForceTrigger);
+      window.removeEventListener('copilot:capture-state-changed', handleCaptureStateChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    sessionIdRef.current = tabSessionId;
+  }, [tabSessionId]);
+
+  useEffect(() => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.get(['meetingMode'], (res) => {
+          const normalized = normalizeMeetingMode(res.meetingMode);
+          setMeetingMode(normalized);
+          try {
+            localStorage.setItem('copilotMeetingMode', normalized);
+          } catch (e) {}
+        });
+      }
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    if (typeof externalCaptureState !== 'boolean') return;
+    handleExternalCaptureState(externalCaptureState, tabSessionId);
+  }, [externalCaptureState, tabSessionId]);
+
+  const sendWsMessage = (msg: any, sessionId: string = sessionIdRef.current) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ ...msg, sessionId }));
     }
+  };
+
+  const applyCaptureState = (nextCapturing: boolean) => {
+    isCapturingRef.current = nextCapturing;
+    setIsCapturing(nextCapturing);
+    setWidgetStates(prev => {
+      const next = {
+        ...prev,
+        functionBar: { ...prev.functionBar, visible: true },
+        transcription: { visible: nextCapturing, minimized: false },
+        response: { visible: nextCapturing, minimized: false }
+      };
+      saveWidgetStates(next);
+      return next;
+    });
+  };
+
+  const loadSessionSettings = (): Promise<Record<string, unknown>> => {
+    return new Promise(resolve => {
+      chrome.storage.local.get([
+        'aiProvider', 'geminiApiKey', 'geminiModel', 'openaiApiKey', 'openaiModel', 'anthropicApiKey', 'anthropicModel',
+        'ollamaEndpoint', 'ollamaModel', 'customProxyEndpoint', 'customProxyApiKey', 'customProxyModel',
+        'meetingMode', 'conversationAnalysisMode', 'responseMode', 'name', 'role', 'seniority', 'skills', 'experiences'
+      ], (stored) => {
+        resolve({
+          aiProvider: stored.aiProvider || 'gemini',
+          geminiApiKey: stored.geminiApiKey,
+          geminiModel: stored.geminiModel,
+          openaiApiKey: stored.openaiApiKey,
+          openaiModel: stored.openaiModel,
+          anthropicApiKey: stored.anthropicApiKey,
+          anthropicModel: stored.anthropicModel,
+          ollamaEndpoint: stored.ollamaEndpoint,
+          ollamaModel: stored.ollamaModel,
+          customProxyEndpoint: stored.customProxyEndpoint,
+          customProxyApiKey: stored.customProxyApiKey,
+          customProxyModel: stored.customProxyModel,
+          meetingMode: stored.meetingMode,
+          conversationAnalysisMode: stored.conversationAnalysisMode === 'hybrid' ? 'hybrid' : 'local',
+          responseMode: stored.responseMode,
+          userProfile: {
+            name: stored.name,
+            role: stored.role,
+            seniority: stored.seniority,
+            skills: stored.skills ? String(stored.skills).split(',').map(s => s.trim()) : [],
+            experiences: stored.experiences ? String(stored.experiences).split(';').map(s => s.trim()) : []
+          }
+        });
+      });
+    });
+  };
+
+  const bootstrapSession = async (
+    sessionId: string,
+    shouldStart: boolean,
+    socket: WebSocket | null = wsRef.current
+  ) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      if (shouldStart) pendingSessionStartRef.current = sessionId;
+      return;
+    }
+
+    socket.send(JSON.stringify({ type: 'session.register', sessionId, payload: {} }));
+    const settings = await loadSessionSettings();
+    if (
+      socket.readyState !== WebSocket.OPEN
+      || wsRef.current !== socket
+      || sessionIdRef.current !== sessionId
+    ) return;
+
+    socket.send(JSON.stringify({ type: 'settings.update', sessionId, payload: settings }));
+    if (
+      shouldStart
+      && (isCapturingRef.current || pendingSessionStartRef.current === sessionId)
+    ) {
+      socket.send(JSON.stringify({ type: 'session.start', sessionId, payload: {} }));
+      pendingSessionStartRef.current = null;
+    }
+  };
+
+  const resetSessionUi = () => {
+    setTranscriptions([]);
+    setPartialTranscript('');
+    setCompletedSuggestions([]);
+    setActiveSuggestion(null);
+    setDetectedQuestion(null);
+    setTone('neutro');
+    setToneConfidence(0.5);
+    setToneSummary('');
+    setSummary(EMPTY_SUMMARY);
+    setSummaryStatus('idle');
+    setIsAudioActive(false);
+    speechManager.cancel();
+    setIsTtsSpeaking(false);
+    setActiveSentenceIndex(null);
+  };
+
+  const startSession = (sessionId: string) => {
+    if (isCapturingRef.current && sessionIdRef.current === sessionId) return;
+
+    sessionIdRef.current = sessionId;
+    onSessionIdChange?.(sessionId);
+    pendingSessionStartRef.current = sessionId;
+    resetSessionUi();
+    setCaptureError(null);
+    applyCaptureState(true);
+    onCaptureStateChange?.(true);
+
+    try {
+      chrome.runtime.sendMessage({ type: 'REGISTER_TAB_SESSION', sessionId }).catch(() => {});
+    } catch {
+      // Ignorar se o contexto da extensão foi invalidado ao recarregar
+    }
+    void bootstrapSession(sessionId, true);
+  };
+
+  const handleExternalCaptureState = (nextCapturing: boolean, sessionId?: string) => {
+    if (nextCapturing) {
+      startSession(sessionId || sessionIdRef.current);
+      return;
+    }
+
+    if (!isCapturingRef.current) return;
+    const stoppedSessionId = sessionIdRef.current;
+    pendingSessionStartRef.current = null;
+    applyCaptureState(false);
+    setIsAudioActive(false);
+    onCaptureStateChange?.(false);
+    sendWsMessage({ type: 'session.stop', payload: {} }, stoppedSessionId);
+  };
+
+  const connectWebSocket = () => {
+    const wsUrl = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:3001/ws';
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      const currentSessionId = sessionIdRef.current;
+      const shouldStart = isCapturingRef.current || pendingSessionStartRef.current === currentSessionId;
+      void bootstrapSession(currentSessionId, shouldStart, ws);
+    };
+
+    ws.onmessage = (event) => {
       try {
         const msg: WSMessage = JSON.parse(event.data);
         handleMessage(msg);
@@ -456,14 +503,17 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
   };
 
   const handleMessage = (msg: WSMessage) => {
-    if (msg.sessionId && msg.sessionId !== tabSessionId) return;
+    if (msg.sessionId && msg.sessionId !== sessionIdRef.current) return;
 
     switch (msg.type) {
       case 'status.update':
       case 'STATUS_UPDATE' as any: {
         const payload = msg.payload as StatusUpdatePayload;
         setStatus(payload);
-        setIsCapturing(payload.isCapturing || false);
+        const isWaitingForStart = pendingSessionStartRef.current === sessionIdRef.current;
+        if (!isWaitingForStart || payload.isCapturing) {
+          applyCaptureState(payload.isCapturing === true);
+        }
         break;
       }
 
@@ -625,55 +675,77 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
         setToneSummary(tonePayload.summary);
         break;
       }
+
+      case 'conversation.summary.updated': {
+        const summaryPayload = msg.payload as ConversationSummaryUpdatePayload;
+        setSummary(summaryPayload.summary || EMPTY_SUMMARY);
+        setSummaryStatus(summaryPayload.status);
+        break;
+      }
     }
   };
 
   // ========= Ações dos Widgets =========
 
   const handleToggleCapture = () => {
-    const nextState = !isCapturing;
+    if (capturePendingRef.current) return;
+    const nextState = !isCapturingRef.current;
+    capturePendingRef.current = true;
+    setIsCapturePending(true);
 
     if (nextState) {
       setCaptureError(null);
-      setWidgetStates(prev => {
-        const next = {
-          ...prev,
-          functionBar: { ...prev.functionBar, visible: true },
-          transcription: { visible: true, minimized: false },
-          response: { visible: true, minimized: false }
-        };
-        saveWidgetStates(next);
-        return next;
-      });
+      const requestedSessionId = createTabSessionId?.() || createSessionId();
 
       chrome.runtime.sendMessage(
-        { type: 'START_CAPTURE', sessionId: tabSessionId },
+        { type: 'START_CAPTURE', sessionId: requestedSessionId },
         (response) => {
+          capturePendingRef.current = false;
+          setIsCapturePending(false);
           if (chrome.runtime.lastError) {
             console.error('[Overlay] Erro ao iniciar captura:', chrome.runtime.lastError.message);
-            setIsCapturing(false);
+            applyCaptureState(false);
           } else if (response?.status === 'ok') {
-            setIsCapturing(true);
-            setCaptureError(null);
-            sendWsMessage({ type: 'session.start', payload: {} });
+            audioKeyRef.current = null;
+            savedSessionIdRef.current = null;
+            setAudioRecordingActive(response.audioRecordingEnabled === true);
+            startSession(response.sessionId || requestedSessionId);
           } else if (response?.status === 'need_invocation') {
-            setIsCapturing(false);
+            applyCaptureState(false);
             setCaptureError('Abra o popup da extensão e inicie a captura por ele.');
           } else if (response?.status === 'error') {
             console.error('[Overlay] Falha ao iniciar captura:', response.error);
-            setIsCapturing(false);
+            applyCaptureState(false);
             setCaptureError(response.error || 'Não foi possível iniciar a captura de áudio.');
           } else {
             console.error('[Overlay] O service worker não confirmou o início da captura.');
-            setIsCapturing(false);
+            applyCaptureState(false);
             setCaptureError('O Chrome não confirmou o início da captura.');
           }
         }
       );
     } else {
-      setIsCapturing(false);
-      sendWsMessage({ type: 'session.stop', payload: {} });
-      chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
+      const stoppedSessionId = sessionIdRef.current;
+      sendWsMessage({ type: 'session.stop', payload: {} }, stoppedSessionId);
+      chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' }, (response) => {
+        capturePendingRef.current = false;
+        setIsCapturePending(false);
+        setAudioRecordingActive(false);
+        if (chrome.runtime.lastError || response?.status !== 'ok') {
+          setCaptureError(response?.error || chrome.runtime.lastError?.message || 'Não foi possível parar a captura.');
+        }
+        if (response?.audioKey) {
+          audioKeyRef.current = response.audioKey;
+          if (savedSessionIdRef.current === stoppedSessionId) {
+            void patchConversationAudioKey(stoppedSessionId, response.audioKey);
+          }
+        } else {
+          audioKeyRef.current = null;
+        }
+        applyCaptureState(false);
+        setIsAudioActive(false);
+        onCaptureStateChange?.(false);
+      });
     }
   };
 
@@ -694,13 +766,18 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
 
   const handleSaveSession = () => {
     const conv: SavedConversation = {
-      id: tabSessionId,
+      id: sessionIdRef.current,
       title: document.title || 'Reunião Copiloto',
       url: window.location.href,
       timestamp: Date.now(),
       transcriptions,
-      suggestions: completedSuggestions
+      suggestions: completedSuggestions,
+      summary: summaryStatus === 'ready' && summary.summaryText
+        ? serializeConversationSummary(summary)
+        : undefined,
+      audioKey: audioKeyRef.current ?? undefined
     };
+    savedSessionIdRef.current = conv.id;
     saveConversation(conv);
     triggerMarkdownDownload(conv);
   };
@@ -716,6 +793,7 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
           onPositionChange={pos => updateWidgetPosition('functionBar', pos)}
           status={status}
           isCapturing={isCapturing}
+          isCapturePending={isCapturePending}
           onToggleCapture={handleToggleCapture}
           isGenerating={!!activeSuggestion}
           isSpeaking={isTtsSpeaking}
@@ -776,6 +854,33 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
         </div>
       )}
 
+      {audioRecordingActive && isCapturing && (
+        <div
+          role="status"
+          style={{
+            position: 'fixed',
+            right: '16px',
+            bottom: '16px',
+            zIndex: 1000001,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 12px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(127, 29, 29, 0.96)',
+            border: '1px solid rgba(239, 68, 68, 0.6)',
+            color: '#fecaca',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            fontSize: '11px',
+            fontWeight: 600,
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)'
+          }}
+        >
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+          GRAVANDO ÁUDIO LOCAL
+        </div>
+      )}
+
       {/* Widget 2: Painel de Resposta */}
       {widgetStates.response.visible && (
         <ResponsePanelWidget
@@ -814,6 +919,8 @@ export const CopilotOverlay: React.FC<CopilotOverlayProps> = ({ tabSessionId }) 
           onDimensionsChange={dimensions => updateWidgetDimensions('transcription', dimensions)}
           utterances={transcriptions}
           partialTranscript={partialTranscript}
+          summary={summary}
+          summaryStatus={summaryStatus}
           onClose={() => updateWidgetVisibility('transcription', false)}
           onToggleMinimize={() => toggleWidgetMinimized('transcription')}
           isMinimized={widgetStates.transcription.minimized}

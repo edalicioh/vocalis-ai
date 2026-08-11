@@ -39,7 +39,8 @@ const MODE_INFO: Record<MeetingMode, { label: string; shortLabel: string; icon: 
   technical_interview: { label: 'Entrevista Técnica', shortLabel: 'Entrevista', icon: <Target size={14} />, color: '#10b981' },
   system_design:      { label: 'System Design',      shortLabel: 'Design',     icon: <Boxes size={14} />,  color: '#8b5cf6' },
   code_review:        { label: 'Code Review',        shortLabel: 'Review',     icon: <Code2 size={14} />,  color: '#ec4899' },
-  general:            { label: 'Reunião Geral',      shortLabel: 'Geral',      icon: <FileText size={14} />, color: '#64748b' }
+  general:            { label: 'Reunião Geral',      shortLabel: 'Geral',      icon: <FileText size={14} />, color: '#64748b' },
+  transcription_only: { label: 'Apenas Transcrição', shortLabel: 'Transcrição', icon: <Mic size={14} />,  color: '#0284c7' }
 };
 
 interface FunctionBarWidgetProps {
@@ -47,6 +48,7 @@ interface FunctionBarWidgetProps {
   onPositionChange: (pos: WidgetPosition) => void;
   status: StatusUpdatePayload;
   isCapturing: boolean;
+  isCapturePending?: boolean;
   onToggleCapture: () => void;
   isGenerating: boolean;
   isSpeaking: boolean;
@@ -76,6 +78,7 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
   onPositionChange,
   status,
   isCapturing,
+  isCapturePending = false,
   onToggleCapture,
   isGenerating,
   isSpeaking,
@@ -200,6 +203,7 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
         {/* 1. Controle de Escuta */}
         <button
           onClick={onToggleCapture}
+          disabled={isCapturePending}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -211,7 +215,8 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
             color: statusColor,
             fontSize: '12px',
             fontWeight: 600,
-            cursor: 'pointer',
+            cursor: isCapturePending ? 'wait' : 'pointer',
+            opacity: isCapturePending ? 0.65 : 1,
             transition: 'all 0.15s ease'
           }}
           title={isCapturing ? 'Pausar escuta da reunião' : 'Iniciar escuta da reunião'}
@@ -412,7 +417,7 @@ export const FunctionBarWidget: React.FC<FunctionBarWidgetProps> = ({
           <div style={{ fontWeight: 600, color: '#94a3b8', fontSize: '11px', marginBottom: '8px', paddingLeft: '4px' }}>
             Modo de Reunião Ativo
           </div>
-          {(['technical_interview', 'system_design', 'code_review', 'general'] as MeetingMode[]).map(modeKey => {
+          {(['technical_interview', 'system_design', 'code_review', 'general', 'transcription_only'] as MeetingMode[]).map(modeKey => {
             const info = MODE_INFO[modeKey];
             const isSelected = meetingMode === modeKey;
             return (

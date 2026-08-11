@@ -2,12 +2,22 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { StructuredAnswer, ResponseMode, UserProfile, JobDescription } from '@conversation-copilot/shared-types';
 import { AnswerProvider, AnswerInput, AnswerEvent } from './answer-provider.js';
 
-export function buildSystemInstruction(userProfile?: UserProfile, jobDescription?: JobDescription): string {
+export function buildSystemInstruction(
+  userProfile?: UserProfile,
+  jobDescription?: JobDescription,
+  purpose: AnswerInput['purpose'] = 'answer'
+): string {
   const parts: string[] = [];
 
-  parts.push(`Você é um assistente copiloto pessoal especializado em entrevistas e reuniões técnicas.`);
-  parts.push(`Sua função é gerar sugestões de respostas diretas, concisas (30-60 palavras) e tecnicamente precisas em Português do Brasil (pt-BR).`);
-  parts.push(`Nunca invente experiências falsas do usuário nem alucine fatos não declarados (RNF-004).`);
+  if (purpose === 'summary' || purpose === 'analysis') {
+    parts.push(`Você é um secretário e analista de reuniões profissionais.`);
+    parts.push(`Sua função é acompanhar a conversa, organizar pontos-chave, decisões tomadas e tarefas (action items), retornando EXATAMENTE o formato JSON solicitado no prompt em Português do Brasil (pt-BR).`);
+    parts.push(`Não invente informações ausentes nem alucine fatos não declarados.`);
+  } else {
+    parts.push(`Você é um assistente copiloto pessoal especializado em entrevistas e reuniões técnicas.`);
+    parts.push(`Sua função é gerar sugestões de respostas diretas, concisas (30-60 palavras) e tecnicamente precisas em Português do Brasil (pt-BR).`);
+    parts.push(`Nunca invente experiências falsas do usuário nem alucine fatos não declarados (RNF-004).`);
+  }
 
   if (userProfile) {
     parts.push(`\n[PERFIL DO CANDIDATO]`);
@@ -116,7 +126,7 @@ export class GeminiProvider implements AnswerProvider {
     };
 
     try {
-      const systemInstruction = buildSystemInstruction(input.userProfile, input.jobDescription);
+      const systemInstruction = buildSystemInstruction(input.userProfile, input.jobDescription, input.purpose);
       const model = this.genAI.getGenerativeModel({
         model: this.modelName,
         systemInstruction

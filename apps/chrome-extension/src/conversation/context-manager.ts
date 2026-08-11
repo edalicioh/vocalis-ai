@@ -40,6 +40,8 @@ export class ContextManager {
     topics: [],
     previousQuestions: [],
     technologies: [],
+    decisions: [],
+    actionItems: [],
     summaryText: '',
     lastUpdated: 0
   };
@@ -58,9 +60,17 @@ export class ContextManager {
       'MODO: CODE REVIEW & REFATORAÇÃO.\n' +
       'Foco em qualidade de código, padrões de projeto (Clean Code/SOLID), complexidade de tempo/espaço (O(N)), potenciais bugs e segurança.',
     general:
-      'MODO: REUNIÃO GERAL & ALINHAMENTO.\n' +
-      'Foco em síntese de discussões, decisões principais tomadas, direcionamentos e lista clara de Action Items (próximos passos).'
+      'MODO: REUNIÃO GERAL & ALINHAMENTO (TRANSCRIÇÃO PASSIVA).\n' +
+      'Não assuma o papel de um candidato em entrevista técnica.\n' +
+      'Foco em síntese de discussões, pontos-chave, decisões principais tomadas, direcionamentos e lista clara de Action Items (próximos passos).',
+    transcription_only:
+      'MODO: APENAS TRANSCRIÇÃO (SEM SUGESTÕES AUTOMÁTICAS).\n' +
+      'Modo de captura e transcrição em tempo real de áudio de reunião. Nenhuma resposta automática é gerada a menos que solicitada manualmente.'
   };
+
+  public isPassiveMode(): boolean {
+    return this.meetingMode === 'general' || this.meetingMode === 'transcription_only';
+  }
 
   public setMeetingMode(mode: MeetingMode, notes?: Partial<Record<MeetingMode, string>> | string) {
     this.meetingMode = mode;
@@ -109,6 +119,8 @@ export class ContextManager {
       topics: [],
       previousQuestions: [],
       technologies: [],
+      decisions: [],
+      actionItems: [],
       summaryText: '',
       lastUpdated: 0
     };

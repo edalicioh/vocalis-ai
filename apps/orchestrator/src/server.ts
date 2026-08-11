@@ -23,6 +23,7 @@ import {
   AudioSource,
   ConversationAnalysisMode,
   QuestionDetectionResult,
+  ConversationSummaryUpdatePayload,
   SessionRegisterPayload
 } from '@conversation-copilot/shared-types';
 
@@ -46,6 +47,11 @@ const pendingQuestionValidations = new Map<string, {
 }>();
 const pendingToneRefinements = new Map<string, {
   version: number;
+  controller: AbortController;
+}>();
+const pendingSummaryRefinements = new Map<string, {
+  version: number;
+  isFinal: boolean;
   controller: AbortController;
 }>();
 const queuedQuestionValidations = new Map<string, QuestionDetectionResult>();
@@ -97,13 +103,16 @@ function getWhisperClient(sessionId: string, source: AudioSource): WhisperClient
     source === 'tab' ? 'interviewer' : 'candidate'
   );
   whisperClients.set(key, client);
-  client.connect((utterance: Utterance) => {
-    if (!activeCaptureSessions.has(sessionId) || whisperClients.get(key) !== client) {
-      server.log.debug({ sessionId, source }, 'Transcrição tardia ignorada porque a sessão de áudio não está ativa.');
-      return;
-    }
-    processUtterance(utterance, sessionId);
-  });
+  client.connect(
+    (utterance: Utterance) => {
+      if (!activeCaptureSessions.has(sessionId) || whisperClients.get(key) !== client) {
+        server.log.debug({ sessionId, source }, 'Transcrição tardia ignorada porque a sessão de áudio não está ativa.');
+        return;
+      }
+      processUtterance(utterance, sessionId);
+    },
+    () => broadcastStatus(sessionId)
+  );
   return client;
 }
 
@@ -159,7 +168,7 @@ function broadcastStatus(targetSessionId?: string) {
     payload: {
       whisperConnected: isWhisperConnected(targetSessionId),
       llmConfigured: answerProvider.isConfigured(),
-      isCapturing: targetSessionId ? (activeSessionId === targetSessionId) : false,
+      isCapturing: targetSessionId ? activeCaptureSessions.has(targetSessionId) : false,
       activeSessionId: targetSessionId || activeSessionId || undefined,
       responseMode: currentResponseMode
     } satisfies StatusUpdatePayload
@@ -251,7 +260,7 @@ async function triggerLLMSuggestion(questionText: string, targetSessionId?: stri
 
         // RN-010: Atualiza resumo em background (assíncrono, não-bloqueante)
         if (cm.shouldUpdateSummary()) {
-          triggerBackgroundSummary(targetSessionId);
+          triggerContinuousSummary(targetSessionId);
         }
       }
 
@@ -296,43 +305,93 @@ async function triggerLLMSuggestion(questionText: string, targetSessionId?: stri
   }
 }
 
-async function triggerBackgroundSummary(targetSessionId?: string) {
-  (async () => {
+function broadcastSummaryStatus(targetSessionId: string | undefined, payload: ConversationSummaryUpdatePayload): void {
+  broadcastToSession(targetSessionId, {
+    type: 'conversation.summary.updated',
+    sessionId: targetSessionId,
+    payload
+  });
+}
+
+/**
+ * Sumarização contínua da conversa (RF-018) com snapshot estruturado.
+ * Dispara a cada 5 falas finais (ou ao encerrar a sessão, com isFinal=true)
+ * e publica o evento conversation.summary.updated no painel.
+ * Assíncrona e não-bloqueante (RN-010).
+ */
+function triggerContinuousSummary(targetSessionId?: string, isFinal = false, versionOverride?: number): void {
+  const cm = getContextManager(targetSessionId);
+  const sessionKey = getSessionKey(targetSessionId);
+
+  if (!answerProvider.isConfigured() || pendingSummaryRefinements.has(sessionKey)) {
+    return;
+  }
+  if (!isFinal && !cm.shouldUpdateSummary()) {
+    return;
+  }
+  if (!isFinal && cm.getRecentUtterances().filter(u => u.isFinal).length < 5) {
+    return;
+  }
+
+  const version = versionOverride ?? (sessionUtteranceVersions.get(sessionKey) || 0);
+  const controller = new AbortController();
+  const pendingSummary = { version, isFinal, controller };
+  pendingSummaryRefinements.set(sessionKey, pendingSummary);
+
+  broadcastSummaryStatus(targetSessionId, {
+    status: 'generating',
+    summary: cm.getSummary(),
+    utteranceVersion: version,
+    isFinal
+  });
+
+  void (async () => {
     try {
-      const cm = getContextManager(targetSessionId);
-      const recentUtterances = cm.getRecentUtterances();
-      if (recentUtterances.length < 5) return;
-
-      const summaryPrompt = cm.buildSummaryPrompt();
-      const summaryStream = answerProvider.generate({
-        requestId: `summary-${Date.now()}`,
-        question: 'resumo',
-        prompt: summaryPrompt,
-        responseMode: 'short'
-      });
-
-      let summaryText = '';
-      for await (const event of summaryStream) {
-        if (event.type === 'answer.delta') {
-          summaryText += (event.data as any).chunk || '';
-        }
+      const result = await MeetingSummaryService.generateStructuredSummary(cm, answerProvider, controller.signal);
+      const currentVersion = sessionUtteranceVersions.get(sessionKey) || 0;
+      if (pendingSummaryRefinements.get(sessionKey) !== pendingSummary) {
+        return;
+      }
+      if (!isFinal && currentVersion !== version) {
+        return;
       }
 
-      try {
-        const jsonMatch = summaryText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          cm.updateSummary(parsed);
-        } else {
-          cm.updateSummary({ summaryText });
-        }
-      } catch {
-        cm.updateSummary({ summaryText });
+      if (result) {
+        cm.updateSummary(result);
+        broadcastSummaryStatus(targetSessionId, {
+          status: 'ready',
+          summary: cm.getSummary(),
+          utteranceVersion: version,
+          isFinal
+        });
+        server.log.info(
+          { targetSessionId, isFinal, utteranceVersion: version },
+          'Resumo da conversa atualizado (snapshot estruturado).'
+        );
+      } else {
+        broadcastSummaryStatus(targetSessionId, {
+          status: 'error',
+          summary: cm.getSummary(),
+          utteranceVersion: version,
+          isFinal,
+          error: 'Não foi possível gerar o resumo da conversa.'
+        });
       }
-
-      server.log.info('Resumo da conversa atualizado em background.');
     } catch (err: any) {
-      server.log.warn({ err }, 'Falha ao atualizar resumo em background (não-crítico).');
+      server.log.warn({ err }, 'Falha ao gerar resumo contínuo (não-crítico).');
+      if (pendingSummaryRefinements.get(sessionKey) === pendingSummary) {
+        broadcastSummaryStatus(targetSessionId, {
+          status: 'error',
+          summary: cm.getSummary(),
+          utteranceVersion: version,
+          isFinal,
+          error: err?.message || 'Falha ao gerar o resumo da conversa.'
+        });
+      }
+    } finally {
+      if (pendingSummaryRefinements.get(sessionKey) === pendingSummary) {
+        pendingSummaryRefinements.delete(sessionKey);
+      }
     }
   })();
 }
@@ -548,7 +607,9 @@ function processUtterance(utterance: Utterance, targetSessionId?: string): void 
   queuedQuestionValidations.delete(sessionKey);
 
   // A transcrição final encerra a fala; o pipeline atual não fornece pausa pós-fala confiável.
-  if (utterance.speaker === 'interviewer') {
+  // No modo passivo (general), a transcrição é apenas exibida — sem detecção automática
+  // de perguntas nem geração proativa de respostas (Alt+S continua disponível).
+  if (utterance.speaker === 'interviewer' && !cm.isPassiveMode()) {
     const detections = QuestionDetector.detectAllWithContext(utterance.text, 0, true, {
       recentUtterances: cm.getRecentUtterances(),
       accumulatedPartials
@@ -561,6 +622,11 @@ function processUtterance(utterance: Utterance, targetSessionId?: string): void 
         void validateAmbiguousQuestion(detection, resolvedSessionId);
       }
     }
+  }
+
+  // Sumarização contínua: gera snapshot estruturado a cada 5 falas finais.
+  if (cm.shouldUpdateSummary()) {
+    triggerContinuousSummary(resolvedSessionId);
   }
 
   const toneResult = ToneAnalyzer.analyzeHeuristic(cm.getRecentUtterances());
@@ -678,9 +744,13 @@ async function startServer() {
 
             case 'session.start': {
               const targetSessionId = msg.sessionId || `session-${Date.now()}`;
+              const isNewActivation = !activeCaptureSessions.has(targetSessionId);
               socketSessionMap.set(socket, targetSessionId);
               activeSessionId = targetSessionId;
               activeAudioSessionId = targetSessionId;
+              if (isNewActivation) {
+                getContextManager(targetSessionId).resetConversation();
+              }
               activeCaptureSessions.add(targetSessionId);
               for (const source of ['tab', 'microphone'] as const) {
                 getWhisperClient(targetSessionId, source).reset();
@@ -710,6 +780,7 @@ async function startServer() {
               server.log.info({ sessionId: targetSessionId, totalAudioBytes }, '🔴 [Sessão] Encerrada pelo usuário.');
 
               const sessionKey = targetSessionId || 'default';
+              const stopVersion = sessionUtteranceVersions.get(sessionKey) || 0;
               const activeReq = sessionActiveRequests.get(sessionKey);
               if (activeReq) {
                 await answerProvider.cancel(activeReq);
@@ -721,6 +792,8 @@ async function startServer() {
               queuedSuggestionQuestions.delete(sessionKey);
               pendingToneRefinements.get(sessionKey)?.controller.abort();
               pendingToneRefinements.delete(sessionKey);
+              pendingSummaryRefinements.get(sessionKey)?.controller.abort();
+              pendingSummaryRefinements.delete(sessionKey);
               sessionUtteranceVersions.delete(sessionKey);
               recentDetectedQuestions.delete(sessionKey);
               if (targetSessionId) {
@@ -742,6 +815,9 @@ async function startServer() {
               }
               broadcastStatus(targetSessionId);
 
+              // Resumo final da sessão exibido no painel (isFinal=true)
+              triggerContinuousSummary(targetSessionId, true, stopVersion);
+
               // Gerar ata em background ao encerrar a chamada (D-01, D-05)
               const cm = getContextManager(targetSessionId);
               MeetingSummaryService.generateSummary(cm, providerManager.geminiProvider).then(markdown => {
@@ -752,6 +828,14 @@ async function startServer() {
                 });
               }).catch(err => {
                 server.log.error(err, 'Erro ao gerar ata da reunião em background');
+              }).finally(() => {
+                if (
+                  targetSessionId
+                  && !activeCaptureSessions.has(targetSessionId)
+                  && sessionContexts.get(targetSessionId) === cm
+                ) {
+                  sessionContexts.delete(targetSessionId);
+                }
               });
 
               break;

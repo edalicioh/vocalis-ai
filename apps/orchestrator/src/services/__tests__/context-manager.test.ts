@@ -43,6 +43,37 @@ describe('ContextManager', () => {
     expect(job.technologies).toEqual(['Node.js', 'PostgreSQL', 'Docker']);
   });
 
+  it('deve limpar a conversa sem apagar perfil, vaga e modos configurados', () => {
+    cm.updateProfile({ name: 'Maria', role: 'Tech Lead' });
+    cm.updateJobDescription({ title: 'Principal Engineer' });
+    cm.setMeetingMode('system_design', 'Priorizar os trade-offs.');
+    cm.setConversationAnalysisMode('hybrid');
+    cm.addUtterance('como você desenharia este sistema?', 'interviewer', false);
+    cm.addUtterance('Como você desenharia este sistema?', 'interviewer', true);
+    cm.updateSummary({ summaryText: 'Resumo da sessão anterior', topics: ['Arquitetura'] });
+    cm.updateTone('tenso', 0.8, 'Conversa sob pressão');
+
+    cm.resetConversation();
+
+    expect(cm.getRecentUtterances()).toEqual([]);
+    expect(cm.getAccumulatedPartials()).toBe('');
+    expect(cm.getSummary().summaryText).toBe('');
+    expect(cm.getPauseSinceLastUtterance()).toBe(0);
+    expect(cm.getTonePayload()).toEqual({
+      tone: 'neutro',
+      confidence: 0.5,
+      summary: '',
+      trends: undefined
+    });
+    expect(cm.shouldUpdateSummary()).toBe(false);
+    expect(cm.shouldRefineTone()).toBe(false);
+    expect(cm.getUserProfile().role).toBe('Tech Lead');
+    expect(cm.getJobDescription().title).toBe('Principal Engineer');
+    expect(cm.getMeetingMode()).toBe('system_design');
+    expect(cm.getModeNotes()).toBe('Priorizar os trade-offs.');
+    expect(cm.getConversationAnalysisMode()).toBe('hybrid');
+  });
+
   it('deve adicionar falas e limitar a janela deslizante (sliding window)', () => {
     for (let i = 1; i <= 25; i++) {
       cm.addUtterance(`Fala número ${i}`, i % 2 === 0 ? 'candidate' : 'interviewer', true);
@@ -201,5 +232,37 @@ describe('ContextManager', () => {
     cm.setConversationAnalysisMode('hybrid');
 
     expect(cm.getConversationAnalysisMode()).toBe('hybrid');
+  });
+
+  it('deve inicializar o resumo estruturado com decisões e action items vazios', () => {
+    const summary = cm.getSummary();
+    expect(summary.topics).toEqual([]);
+    expect(summary.decisions).toEqual([]);
+    expect(summary.actionItems).toEqual([]);
+    expect(summary.summaryText).toBe('');
+  });
+
+  it('deve incluir decisões e action items no prompt de sumarização', () => {
+    const prompt = cm.buildSummaryPrompt();
+    expect(prompt).toContain('"decisions": ["..."]');
+    expect(prompt).toContain('"actionItems": ["..."]');
+    expect(prompt).toContain('"summaryText": "..."');
+  });
+
+  it('deve acumular decisões e action items no resumo estruturado', () => {
+    cm.updateSummary({
+      summaryText: 'Alinhamento da sprint',
+      decisions: ['Usar Kafka para mensageria'],
+      actionItems: ['Criar PR da fila']
+    });
+
+    const summary = cm.getSummary();
+    expect(summary.decisions).toEqual(['Usar Kafka para mensageria']);
+    expect(summary.actionItems).toEqual(['Criar PR da fila']);
+    expect(summary.lastUpdated).toBeGreaterThan(0);
+
+    cm.resetConversation();
+    expect(cm.getSummary().decisions).toEqual([]);
+    expect(cm.getSummary().actionItems).toEqual([]);
   });
 });

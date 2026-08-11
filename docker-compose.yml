@@ -57,7 +57,7 @@ services:
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
       - WHISPER_DEVICE=cuda
       - WHISPER_COMPUTE=${WHISPER_COMPUTE:-float16}
-      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-auto}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-pt}
     deploy:
       resources:
         reservations:
@@ -93,7 +93,7 @@ services:
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
       - WHISPER_DEVICE=cpu
       - WHISPER_COMPUTE=${WHISPER_COMPUTE:-int8}
-      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-auto}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-pt}
     volumes:
       - whisper-cache:/home/copilot/.cache
     networks:

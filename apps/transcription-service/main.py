@@ -16,6 +16,9 @@ DEVICE = os.getenv("WHISPER_DEVICE", "cpu")  # "cuda" ou "cpu"
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE", "int8")
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "auto")
 WHISPER_TASK = os.getenv("WHISPER_TASK", "transcribe")
+PARTIAL_INTERVAL_SECONDS = float(os.getenv("WHISPER_PARTIAL_INTERVAL", "1.0"))
+MAX_SEGMENT_SECONDS = float(os.getenv("WHISPER_MAX_SEGMENT", "15.0"))
+SILENCE_FINALIZE_SECONDS = float(os.getenv("WHISPER_SILENCE_FINALIZE", "0.8"))
 
 logger.info(f"Carregando modelo faster-whisper '{MODEL_SIZE}' na device '{DEVICE}' com compute_type='{COMPUTE_TYPE}', idioma='{WHISPER_LANGUAGE}', task='{WHISPER_TASK}'...")
 try:
@@ -33,10 +36,18 @@ async def health_check():
         "device": DEVICE,
         "language": WHISPER_LANGUAGE,
         "task": WHISPER_TASK,
+        "partial_interval": PARTIAL_INTERVAL_SECONDS,
+        "max_segment": MAX_SEGMENT_SECONDS,
+        "silence_finalize": SILENCE_FINALIZE_SECONDS,
         "model_loaded": model is not None
     }
 
-def _run_whisper_transcription(audio_data: np.ndarray, target_language: str = None, target_task: str = None):
+def _run_whisper_transcription(
+    audio_data: np.ndarray,
+    target_language: str = None,
+    target_task: str = None,
+    beam_size: int = 3
+):
     if model is None:
         return None
     lang_setting = target_language if target_language is not None else WHISPER_LANGUAGE
@@ -45,13 +56,13 @@ def _run_whisper_transcription(audio_data: np.ndarray, target_language: str = No
     
     segments, info = model.transcribe(
         audio_data,
-        beam_size=3,
+        beam_size=beam_size,
         language=lang_param,
         task=task_setting,
         vad_filter=True,
         vad_parameters=dict(
-            min_silence_duration_ms=500,
-            speech_pad_ms=400,
+            min_silence_duration_ms=300,
+            speech_pad_ms=200,
             threshold=0.5
         )
     )
@@ -77,54 +88,103 @@ async def websocket_transcribe(websocket: WebSocket):
     audio_buffer = bytearray()
     SAMPLE_RATE = 16000
     BYTES_PER_SAMPLE = 2  # 16-bit PCM (int16)
-    CHUNK_SIZE_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * 1.5)
+    PARTIAL_INTERVAL_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * PARTIAL_INTERVAL_SECONDS)
+    MAX_SEGMENT_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * MAX_SEGMENT_SECONDS)
 
     client_language = None
     client_task = None
+    detected_language = None
+    bytes_since_partial = 0
+
+    async def transcribe_buffer(event_type: str):
+        nonlocal detected_language
+        if not audio_buffer:
+            return
+
+        audio_int16 = np.frombuffer(bytes(audio_buffer), dtype=np.int16)
+        audio_float32 = audio_int16.astype(np.float32) / 32768.0
+        effective_language = client_language or detected_language
+        beam_size = 1 if event_type == "transcript.partial" else 5
+        res = await asyncio.to_thread(
+            _run_whisper_transcription,
+            audio_float32,
+            effective_language,
+            client_task,
+            beam_size
+        )
+
+        if not res:
+            return
+
+        full_text, lang, lang_prob, confidence, start_time, end_time = res
+        if (
+            event_type == "transcript.final"
+            and client_language is None
+            and str(WHISPER_LANGUAGE).lower() in ("auto", "none", "")
+            and lang_prob >= 0.8
+        ):
+            detected_language = lang
+
+        logger.info(
+            f"🎙️ [Whisper Transcrição {event_type}]: '{full_text}' "
+            f"(lang={lang}, prob={lang_prob:.2f}, conf={confidence:.2f})"
+        )
+        await websocket.send_text(json.dumps({
+            "type": event_type,
+            "payload": {
+                "text": full_text,
+                "language": lang,
+                "probability": lang_prob,
+                "confidence": round(confidence, 2),
+                "start": round(start_time, 2),
+                "end": round(end_time, 2)
+            }
+        }))
 
     try:
         while True:
-            data = await websocket.receive()
+            if audio_buffer:
+                try:
+                    data = await asyncio.wait_for(
+                        websocket.receive(),
+                        timeout=SILENCE_FINALIZE_SECONDS
+                    )
+                except asyncio.TimeoutError:
+                    await transcribe_buffer("transcript.final")
+                    audio_buffer.clear()
+                    bytes_since_partial = 0
+                    continue
+            else:
+                data = await websocket.receive()
+
+            if data.get("type") == "websocket.disconnect":
+                break
+
             if "bytes" in data and data["bytes"]:
                 audio_buffer.extend(data["bytes"])
-                
-                if len(audio_buffer) >= CHUNK_SIZE_BYTES:
-                    raw_bytes = bytes(audio_buffer)
-                    audio_int16 = np.frombuffer(raw_bytes, dtype=np.int16)
-                    audio_float32 = audio_int16.astype(np.float32) / 32768.0
+                bytes_since_partial += len(data["bytes"])
 
-                    res = await asyncio.to_thread(_run_whisper_transcription, audio_float32, client_language, client_task)
-
-                    if res:
-                        full_text, lang, lang_prob, confidence, start_time, end_time = res
-
-                        logger.info(f"🎙️ [Whisper Transcrição]: '{full_text}' (lang={lang}, prob={lang_prob:.2f}, conf={confidence:.2f})")
-
-                        response_msg = {
-                            "type": "transcript.final",
-                            "payload": {
-                                "text": full_text,
-                                "language": lang,
-                                "probability": lang_prob,
-                                "confidence": round(confidence, 2),
-                                "start": round(start_time, 2),
-                                "end": round(end_time, 2)
-                            }
-                        }
-                        await websocket.send_text(json.dumps(response_msg))
-
-                    overlap_bytes = int(SAMPLE_RATE * BYTES_PER_SAMPLE * 0.5)
-                    audio_buffer = audio_buffer[-overlap_bytes:]
+                if len(audio_buffer) >= MAX_SEGMENT_BYTES:
+                    await transcribe_buffer("transcript.final")
+                    audio_buffer.clear()
+                    bytes_since_partial = 0
+                elif bytes_since_partial >= PARTIAL_INTERVAL_BYTES:
+                    await transcribe_buffer("transcript.partial")
+                    bytes_since_partial = 0
 
             elif "text" in data and data["text"]:
                 msg = json.loads(data["text"])
                 if msg.get("type") == "RESET":
                     audio_buffer.clear()
+                    bytes_since_partial = 0
+                    detected_language = None
                     await websocket.send_text(json.dumps({"type": "RESET_ACK"}))
                 elif msg.get("type") == "SET_CONFIG":
                     payload = msg.get("payload", {})
                     if "language" in payload:
-                        client_language = payload["language"]
+                        language = payload["language"]
+                        client_language = None if str(language).lower() in ("auto", "none", "") else language
+                        detected_language = None
                     if "task" in payload:
                         client_task = payload["task"]
                     await websocket.send_text(json.dumps({"type": "CONFIG_ACK", "payload": {"language": client_language, "task": client_task}}))

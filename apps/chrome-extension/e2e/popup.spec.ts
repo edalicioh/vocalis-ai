@@ -52,5 +52,6 @@ test.describe('Chrome Extension E2E — Popup de Atalho & Status', () => {
     // Verifica que o cartão de controle "Copiloto nesta página" é visível
     const statusText = page.locator('text=Copiloto nesta página');
     await expect(statusText).toBeVisible();
+    await expect(page.locator('text=Captura desativada')).toBeVisible();
   });
 });
